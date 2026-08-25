@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+torch
+transformers
+pandas
+scikit-learn
+rapidfuzz
+idna
+httpx
+beautifulsoup4
+python-multipart
