@@ -82,7 +82,7 @@ def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5):
     tulis_log("antiscam", f"Model tersimpan di: {checkpoint_path}")
 
 
-def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5):
+def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5, freeze_backbone=False):
     checkpoint_dir = BASE_DIR / "experiments" / "checkpoints" / "deepfake"
     checkpoint_path = checkpoint_dir / "model.pt"
 
@@ -92,12 +92,18 @@ def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5):
     # pin_memory: mempercepat transfer data ke GPU (VRAM)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
 
-    model = load_deepfake_model().to(device)
+    model = load_deepfake_model(freeze_backbone=freeze_backbone).to(device)
     if checkpoint_path.exists():
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
         tulis_log("deepfake", f"Lanjut training dari checkpoint: {checkpoint_path}")
 
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    mode_teks = "backbone dibekukan, cuma classifier belajar" if freeze_backbone else "seluruh model belajar"
+    tulis_log("deepfake", f"Mode training: {mode_teks}")
+
+    # Optimizer cuma dikasih parameter yang requires_grad=True, biar parameter
+    # yang dibekukan (freeze_backbone=True) tidak ikut dihitung optimizer
+    parameter_yang_dilatih = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = AdamW(parameter_yang_dilatih, lr=learning_rate)
 
     # Mixed precision: hitung sebagian pakai angka 16-bit, bukan 32-bit,
     # bisa menghemat VRAM sampai ~40-50% dengan akurasi hampir sama
@@ -135,6 +141,8 @@ if __name__ == "__main__":
     parser.add_argument("--target", choices=["antiscam", "deepfake"], required=True)
     parser.add_argument("--epoch", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--freeze-backbone", action="store_true",
+                         help="Hanya untuk --target deepfake. Bekukan SigLIP, cuma classifier yang dilatih (hemat VRAM & waktu, cocok kalau dataset kecil).")
     args = parser.parse_args()
 
     print(f"Device: {device}")
@@ -142,4 +150,4 @@ if __name__ == "__main__":
     if args.target == "antiscam":
         train_antiscam(jumlah_epoch=args.epoch, batch_size=args.batch_size)
     else:
-        train_deepfake(jumlah_epoch=args.epoch, batch_size=args.batch_size)
+        train_deepfake(jumlah_epoch=args.epoch, batch_size=args.batch_size, freeze_backbone=args.freeze_backbone)

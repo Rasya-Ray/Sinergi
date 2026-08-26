@@ -1,0 +1,47 @@
+# =========================
+# PyTorch
+# =========================
+torch
+torchvision
+torchaudio
+
+# =========================
+# Hugging Face
+# =========================
+transformers
+huggingface-hub
+tokenizers
+safetensors
+
+# =========================
+# Data & Computer Vision
+# =========================
+numpy
+pandas
+Pillow
+opencv-python
+
+# =========================
+# Machine Learning
+# =========================
+scikit-learn
+tqdm
+
+# =========================
+# FastAPI
+# =========================
+fastapi
+uvicorn[standard]
+python-multipart
+
+# =========================
+# Validation & Config
+# =========================
+pydantic
+python-dotenv
+
+# =========================
+# HTTP
+# =========================
+httpx
+requests
