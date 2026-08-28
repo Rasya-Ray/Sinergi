@@ -16,6 +16,7 @@ import torch.nn as nn
 from pathlib import Path
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import AutoTokenizer, AutoImageProcessor
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -58,7 +59,10 @@ def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5):
     model.train()
     for epoch in range(jumlah_epoch):
         total_loss, total_akurasi = 0, 0
-        for batch in dataloader:
+        # tqdm: nampilin progress bar per-batch, biar keliatan lagi jalan
+        # (bukan diem doang sampe 1 epoch penuh selesai)
+        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{jumlah_epoch}")
+        for batch in progress_bar:
             optimizer.zero_grad()
             output = model(
                 batch["url_ids"].to(device), batch["url_mask"].to(device),
@@ -72,6 +76,7 @@ def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5):
 
             total_loss += loss.item()
             total_akurasi += hitung_akurasi_biner(output, label)
+            progress_bar.set_postfix(loss=f"{loss.item():.4f}")
 
         rata_loss = total_loss / len(dataloader)
         rata_akurasi = total_akurasi / len(dataloader)
@@ -113,7 +118,8 @@ def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5, freeze_back
     model.train()
     for epoch in range(jumlah_epoch):
         total_loss, total_akurasi = 0, 0
-        for batch in dataloader:
+        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{jumlah_epoch}")
+        for batch in progress_bar:
             optimizer.zero_grad()
 
             with torch.autocast(device_type=device.type, enabled=pakai_amp):
@@ -126,6 +132,7 @@ def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5, freeze_back
 
             total_loss += loss.item()
             total_akurasi += hitung_akurasi_kelas(output.logits, batch["labels"].to(device))
+            progress_bar.set_postfix(loss=f"{loss.item():.4f}")
 
         rata_loss = total_loss / len(dataloader)
         rata_akurasi = total_akurasi / len(dataloader)
