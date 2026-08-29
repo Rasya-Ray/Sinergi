@@ -11,7 +11,10 @@ Arsitektur:
           ↓
       Fake / Real
 
-Model dan classifier sama-sama dapat di-fine-tune.
+Default freeze_backbone=True: SigLIP dibekukan, cuma classification
+head yang dilatih. Backbone udah "pintar" duluan (pretrained), nggak
+perlu dilatih ulang -- training jauh lebih cepat karena gradient cuma
+dihitung untuk classifier, bukan seluruh SigLIP.
 
 Resume checkpoint TIDAK dilakukan di file ini.
 Resume dilakukan oleh train.py karena checkpoint
@@ -49,7 +52,7 @@ class DeepfakeModel(nn.Module):
 
     def __init__(
         self,
-        freeze_backbone=False,
+        freeze_backbone=True,
     ):
         super().__init__()
 
@@ -221,18 +224,22 @@ class DeepfakeModel(nn.Module):
 # LOAD MODEL
 
 def load_deepfake_model(
-    freeze_backbone=False,
+    freeze_backbone=True,
 ):
 
     """
     Membuat model pretrained.
 
     Default:
-        freeze_backbone=False
+        freeze_backbone=True
 
     Artinya:
-        SigLIP      → belajar
+        SigLIP      → dibekukan (nggak dilatih ulang)
         classifier  → belajar
+
+    Sama seperti HybridAntiScamModel: backbone udah pintar dari
+    pretraining, training jadi jauh lebih cepat karena cuma classifier
+    kecil yang di-update.
     """
 
     return DeepfakeModel(

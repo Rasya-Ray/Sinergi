@@ -39,7 +39,7 @@ class AntiScamInput(BaseModel):
     url: str
     header_text: str = ""
     body_text: str = ""
-    popup_text: str = ""
+    # popup_text: str = ""
     form_data: dict = {}
 
 
@@ -71,14 +71,14 @@ async def check_image(file: UploadFile = File(...)):
 @app.post("/reload-antiscam-model")
 def reload_antiscam_model():
     """Panggil setelah training baru selesai, biar server pakai weight terbaru."""
-    berhasil = agent_antiscam.reload_checkpoint()
-    return {"reloaded": berhasil}
+    agent_antiscam.reload_checkpoint()
+    return {"reloaded": True}
 
 
 @app.post("/reload-deepfake-model")
 def reload_deepfake_model():
-    berhasil = agent_deepfake.reload_checkpoint()
-    return {"reloaded": berhasil}
+    agent_deepfake.reload_checkpoint()
+    return {"reloaded": True}
 
 
 @app.get("/health")

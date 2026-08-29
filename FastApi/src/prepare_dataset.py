@@ -54,7 +54,7 @@ def gabungkan_dataset_antiscam():
         for _, row in df.iterrows():
             baris_gabungan.append({
                 "url": "",
-                "website_text": row[kolom_data],
+                "body_text": row[kolom_data],
                 "has_form": 0,
                 "has_password_input": 0,
                 "has_sensitive_input": 0,

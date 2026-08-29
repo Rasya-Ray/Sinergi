@@ -18,24 +18,22 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class AgentAntiScam:
     def __init__(self):
+        if not CHECKPOINT_PATH.exists():
+            raise FileNotFoundError(
+                f"Checkpoint belum ada di {CHECKPOINT_PATH}. "
+                f"Jalankan 'python train.py --target antiscam' dulu sebelum serving."
+            )
+
         self.url_tokenizer = AutoTokenizer.from_pretrained(URL_MODEL_NAME)
         self.content_tokenizer = AutoTokenizer.from_pretrained(CONTENT_MODEL_NAME)
         self.model = HybridAntiScamModel()
-
-        if CHECKPOINT_PATH.exists():
-            self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
-            print(f"[AgentAntiScam] Checkpoint fine-tuning dimuat: {CHECKPOINT_PATH}")
-        else:
-            print("[AgentAntiScam] Belum ada checkpoint fine-tuning, prediksi masih acak.")
-
+        self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
         self.model.to(device)
         self.model.eval()
 
     def predict(self, json_data: dict) -> dict:
         url = json_data.get("url", "")
-        header = json_data.get("header_text", "")
-        body = json_data.get("body_text", "")
-        popup = json_data.get("popup_text", "")
+        body_text = json_data.get("body_text", "")
 
         form_info = json_data.get("form_data", {})
         f1 = 1.0 if form_info.get("has_form", False) else 0.0
@@ -44,13 +42,12 @@ class AgentAntiScam:
         f4 = 1.0 if form_info.get("form_action_external", False) else 0.0
 
         form_tensor = torch.tensor([[f1, f2, f3, f4]], dtype=torch.float).to(device)
-        combined_text = f"{header} {popup} {body}".strip()
 
         url_inputs = self.url_tokenizer(
             url, padding="max_length", truncation=True, max_length=128, return_tensors="pt"
         ).to(device)
         content_inputs = self.content_tokenizer(
-            combined_text, padding="max_length", truncation=True, max_length=512, return_tensors="pt"
+            body_text, padding="max_length", truncation=True, max_length=512, return_tensors="pt"
         ).to(device)
 
         with torch.no_grad():
@@ -70,9 +67,7 @@ class AgentAntiScam:
             "status": "Aman" if is_safe else "Scam / Phishing Berbahaya"
         }
 
-    def reload_checkpoint(self) -> bool:
-        if CHECKPOINT_PATH.exists():
-            self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
-            self.model.eval()
-            return True
-        return False
+    def reload_checkpoint(self):
+        """Dipanggil setelah training baru selesai, ambil weight terbaru dari disk."""
+        self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
+        self.model.eval()

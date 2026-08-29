@@ -21,18 +21,15 @@ id2label = {0: "fake", 1: "real"}
 
 class AgentDeepfake:
     def __init__(self):
+        if not CHECKPOINT_PATH.exists():
+            raise FileNotFoundError(
+                f"Checkpoint belum ada di {CHECKPOINT_PATH}. "
+                f"Jalankan 'python train.py --target deepfake' dulu sebelum serving."
+            )
+
         self.processor = AutoImageProcessor.from_pretrained(DEEPFAKE_MODEL_NAME)
-        # freeze_backbone tidak berpengaruh ke hasil inference (cuma
-        # relevan pas training), tetap ditulis eksplisit biar konsisten
-        # dengan cara train.py membuat model yang sama.
-        self.model = load_deepfake_model(freeze_backbone=False)
-
-        if CHECKPOINT_PATH.exists():
-            self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
-            print(f"[AgentDeepfake] Checkpoint fine-tuning dimuat: {CHECKPOINT_PATH}")
-        else:
-            print("[AgentDeepfake] Belum ada checkpoint fine-tuning, pakai model pretrained bawaan.")
-
+        self.model = load_deepfake_model(freeze_backbone=True)
+        self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
         self.model.to(device)
         self.model.eval()
 
@@ -60,10 +57,7 @@ class AgentDeepfake:
             "status": "Asli (Real)" if is_real else "Manipulasi (Deepfake)"
         }
 
-    def reload_checkpoint(self) -> bool:
+    def reload_checkpoint(self):
         """Dipanggil setelah training baru selesai, ambil weight terbaru dari disk."""
-        if CHECKPOINT_PATH.exists():
-            self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
-            self.model.eval()
-            return True
-        return False
+        self.model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
+        self.model.eval()

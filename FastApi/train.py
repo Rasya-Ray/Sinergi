@@ -38,7 +38,7 @@ def tulis_log(target, pesan):
         f.write(pesan + "\n")
 
 
-def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5):
+def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5, freeze_backbone=True):
     checkpoint_dir = BASE_DIR / "experiments" / "checkpoints" / "antiscam"
     checkpoint_path = checkpoint_dir / "model.pt"
 
@@ -48,12 +48,16 @@ def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5):
     dataset = AntiScamDataset(url_tokenizer, content_tokenizer)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    model = HybridAntiScamModel().to(device)
+    model = HybridAntiScamModel(freeze_backbone=freeze_backbone).to(device)
     if checkpoint_path.exists():
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
         tulis_log("antiscam", f"Lanjut training dari checkpoint: {checkpoint_path}")
 
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    mode_teks = "backbone dibekukan, cuma classifier belajar (cepat)" if freeze_backbone else "seluruh model belajar (lambat, lebih akurat kalau data banyak)"
+    tulis_log("antiscam", f"Mode training: {mode_teks}")
+
+    parameter_yang_dilatih = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = AdamW(parameter_yang_dilatih, lr=learning_rate)
     criterion = nn.BCELoss()
 
     model.train()
@@ -87,7 +91,7 @@ def train_antiscam(jumlah_epoch=3, batch_size=8, learning_rate=2e-5):
     tulis_log("antiscam", f"Model tersimpan di: {checkpoint_path}")
 
 
-def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5, freeze_backbone=False):
+def train_deepfake(jumlah_epoch=3, batch_size=8, learning_rate=1e-5, freeze_backbone=True):
     checkpoint_dir = BASE_DIR / "experiments" / "checkpoints" / "deepfake"
     checkpoint_path = checkpoint_dir / "model.pt"
 
@@ -148,13 +152,15 @@ if __name__ == "__main__":
     parser.add_argument("--target", choices=["antiscam", "deepfake"], required=True)
     parser.add_argument("--epoch", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--freeze-backbone", action="store_true",
-                         help="Hanya untuk --target deepfake. Bekukan SigLIP, cuma classifier yang dilatih (hemat VRAM & waktu, cocok kalau dataset kecil).")
+    parser.add_argument("--freeze-backbone", action="store_true", default=None,
+                         help="Bekukan backbone pretrained, cuma classifier yang dilatih (jauh lebih cepat). Default: True untuk antiscam, False untuk deepfake.")
     args = parser.parse_args()
 
     print(f"Device: {device}")
 
     if args.target == "antiscam":
-        train_antiscam(jumlah_epoch=args.epoch, batch_size=args.batch_size)
+        freeze = True if args.freeze_backbone is None else args.freeze_backbone
+        train_antiscam(jumlah_epoch=args.epoch, batch_size=args.batch_size, freeze_backbone=freeze)
     else:
-        train_deepfake(jumlah_epoch=args.epoch, batch_size=args.batch_size, freeze_backbone=args.freeze_backbone)
+        freeze = True if args.freeze_backbone is None else args.freeze_backbone
+        train_deepfake(jumlah_epoch=args.epoch, batch_size=args.batch_size, freeze_backbone=freeze)
