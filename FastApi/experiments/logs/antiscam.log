@@ -1,0 +1,5 @@
+Mode training: backbone dibekukan, cuma classifier belajar (cepat)
+Epoch 1/3 - Loss: 0.7036 - Akurasi: 51.94%
+Epoch 2/3 - Loss: 0.6977 - Akurasi: 51.11%
+Epoch 3/3 - Loss: 0.6966 - Akurasi: 48.89%
+Model tersimpan di: /kaggle/working/Sinergi/FastApi/experiments/checkpoints/antiscam/model.pt
