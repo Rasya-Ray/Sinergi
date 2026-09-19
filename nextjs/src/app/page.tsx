@@ -1,99 +1,13 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useScroll, useTransform, useInView } from "framer-motion";
-import { Shield, Search, Brain, AlertTriangle, FileCheck, Activity } from "lucide-react";
+import { motion, useInView } from "framer-motion";
+import { Search, Brain, AlertTriangle, FileCheck, Activity } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { useState, useEffect } from "react";
-
-function ScrollIntro() {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start start", "end start"],
-  });
-
-  const logoScale = useTransform(scrollYProgress, [0, 0.4], [0.3, 1]);
-  const logoOpacity = useTransform(scrollYProgress, [0, 0.3], [0, 1]);
-  const logoY = useTransform(scrollYProgress, [0, 0.4], [60, 0]);
-  const logoRotate = useTransform(scrollYProgress, [0, 0.3], [-15, 0]);
-
-  const textOpacity = useTransform(scrollYProgress, [0.25, 0.5], [0, 1]);
-  const textY = useTransform(scrollYProgress, [0.25, 0.5], [30, 0]);
-
-  const subOpacity = useTransform(scrollYProgress, [0.4, 0.6], [0, 1]);
-  const subY = useTransform(scrollYProgress, [0.4, 0.6], [20, 0]);
-
-  const ringScale = useTransform(scrollYProgress, [0.1, 0.5], [0.5, 1]);
-  const ringOpacity = useTransform(scrollYProgress, [0.1, 0.3, 0.6], [0, 0.4, 0.15]);
-
-  const fadeOut = useTransform(scrollYProgress, [0.75, 1], [1, 0]);
-
-  return (
-    <div ref={ref} className="h-[250vh] relative">
-      <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden bg-neo-black">
-        <motion.div style={{ opacity: fadeOut }} className="relative flex flex-col items-center">
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <motion.div
-              className="absolute rounded-full border border-neo-yellow/20"
-              style={{ width: 200, height: 200, scale: ringScale, opacity: ringOpacity }}
-            />
-            <motion.div
-              className="absolute rounded-full border border-neo-yellow/10"
-              style={{ width: 280, height: 280, scale: ringScale, opacity: ringOpacity }}
-            />
-            <motion.div
-              className="absolute rounded-full border border-neo-yellow/5"
-              style={{ width: 360, height: 360, scale: ringScale, opacity: ringOpacity }}
-            />
-          </div>
-
-          <motion.div
-            style={{ scale: logoScale, opacity: logoOpacity, y: logoY, rotate: logoRotate }}
-            className="relative z-10 mb-6"
-          >
-            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40">
-              <path
-                d="M36 4L12 36h16L24 60l28-32H36L44 4H36Z"
-                fill="white"
-                stroke="white"
-                strokeWidth="1"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
-
-          <motion.div style={{ opacity: textOpacity, y: textY }} className="relative z-10 text-center">
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white tracking-[0.25em]">
-              NESTI
-            </h1>
-          </motion.div>
-
-          <motion.div style={{ opacity: subOpacity, y: subY }} className="relative z-10 mt-3">
-            <p className="text-xs md:text-sm text-neo-yellow/50 tracking-[0.6em] font-mono uppercase">
-              AI Web Security Analyst
-            </p>
-          </motion.div>
-
-          <motion.div
-            style={{ opacity: subOpacity }}
-            className="absolute -bottom-16 left-1/2 -translate-x-1/2"
-          >
-            <motion.div
-              animate={{ y: [0, 8, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2"
-            >
-              <div className="w-1 h-2 bg-white/50 rounded-full" />
-            </motion.div>
-          </motion.div>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
+import { HeroIntro } from "@/components/HeroIntro";
 
 function AnimatedSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   const ref = useRef(null);
@@ -159,7 +73,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-neo-white">
-      <ScrollIntro />
+      <HeroIntro />
 
       <section className="max-w-7xl mx-auto px-6 pt-24 pb-16">
         <AnimatedSection className="text-center mb-16">
