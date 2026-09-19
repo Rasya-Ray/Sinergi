@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 
-const WORDS = ["WEB DEVELOPER", "FRONTEND ENGINEER", "SECURITY ANALYST", "PORTFOLIO"];
+const WORDS = ["RASYA", "KELVIN FATHIR", "NESTI"];
 
 function RotatingWord() {
   const [index, setIndex] = useState(0);
