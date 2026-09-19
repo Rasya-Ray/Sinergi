@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/tools/password", label: "PASSWORD" },
   { href: "/monitoring", label: "MONITOR" },
   { href: "/reports", label: "REPORTS" },
+  { href: "/history", label: "HISTORY" },
   { href: "/telegram", label: "TELEGRAM" },
 ];
 

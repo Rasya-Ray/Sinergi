@@ -12,11 +12,11 @@ export default function PasswordPage() {
   const [result, setResult] = useState<any>(null);
 
   const strengthConfig: Record<string, { label: string; color: string; bgColor: string; icon: any; description: string }> = {
-    Strong: { label: "STRONG", color: "text-white", bgColor: "bg-neo-green", icon: Shield, description: "Excellent! Your password is highly resistant to cracking attempts." },
-    Good: { label: "GOOD", color: "text-white", bgColor: "bg-neo-blue", icon: CheckCircle, description: "Solid password. Could be even stronger with a few tweaks." },
-    Fair: { label: "FAIR", color: "text-white", bgColor: "bg-neo-orange", icon: AlertTriangle, description: "Moderate strength. Vulnerable to targeted attacks. Consider improving it." },
-    Weak: { label: "WEAK", color: "text-white", bgColor: "bg-neo-pink", icon: AlertTriangle, description: "Easily cracked. This password provides minimal security." },
-    "Very Weak": { label: "VERY WEAK", color: "text-white", bgColor: "bg-neo-pink", icon: AlertTriangle, description: "Extremely vulnerable. Can be cracked in seconds by any attacker." },
+    Strong: { label: "STRONG", color: "text-neo-black", bgColor: "bg-neo-green", icon: Shield, description: "Excellent! Your password is highly resistant to cracking attempts." },
+    Good: { label: "GOOD", color: "text-neo-black", bgColor: "bg-neo-blue", icon: CheckCircle, description: "Solid password. Could be even stronger with a few tweaks." },
+    Fair: { label: "FAIR", color: "text-neo-black", bgColor: "bg-neo-orange", icon: AlertTriangle, description: "Moderate strength. Vulnerable to targeted attacks. Consider improving it." },
+    Weak: { label: "WEAK", color: "text-neo-black", bgColor: "bg-neo-pink", icon: AlertTriangle, description: "Easily cracked. This password provides minimal security." },
+    "Very Weak": { label: "VERY WEAK", color: "text-neo-black", bgColor: "bg-neo-pink", icon: AlertTriangle, description: "Extremely vulnerable. Can be cracked in seconds by any attacker." },
   };
 
   function getScoreBar(score: number) {

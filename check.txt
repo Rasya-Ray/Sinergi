@@ -1,0 +1,75 @@
+========================================
+NESTI SERVICE COMMANDS
+========================================
+
+--- NESTI NEXTJS (Frontend) ---
+
+Start:     systemctl start nesti-nextjs
+Stop:      systemctl stop nesti-nextjs
+Restart:   systemctl restart nesti-nextjs
+Status:    systemctl status nesti-nextjs
+Logs:      journalctl -u nesti-nextjs -f
+Logs today: journalctl -u nesti-nextjs --since today
+Logs error: journalctl -u nesti-nextjs -p err
+Enable:    systemctl enable nesti-nextjs
+Disable:   systemctl disable nesti-nextjs
+
+Port:      3000
+URL:       http://localhost:3000
+
+--- NESTI SCANNER (Python + Telegram Bot) ---
+
+Start:     systemctl start nesti-scanner
+Stop:      systemctl stop nesti-scanner
+Restart:   systemctl restart nesti-scanner
+Status:    systemctl status nesti-scanner
+Logs:      journalctl -u nesti-scanner -f
+Logs today: journalctl -u nesti-scanner --since today
+Logs error: journalctl -u nesti-scanner -p err
+Enable:    systemctl enable nesti-scanner
+Disable:   systemctl disable nesti-scanner
+
+Port:      8090
+URL:       http://localhost:8090/health
+
+--- NGINX ---
+
+Start:     systemctl start nginx
+Stop:      systemctl stop nginx
+Restart:   systemctl restart nginx
+Reload:    systemctl reload nginx
+Status:    systemctl status nginx
+Logs:      journalctl -u nginx -f
+Config:    nginx -t
+
+--- CHECK PORTS ---
+
+lsof -i :3000
+lsof -i :8090
+lsof -i :80
+
+--- QUICK RESTART ALL ---
+
+systemctl restart nesti-nextjs && systemctl restart nesti-scanner && systemctl restart nginx
+
+--- SYSTEMD EDIT (No Pager) ---
+
+systemctl edit nesti-nextjs --no-pager
+systemctl edit nesti-scanner --no-pager
+
+--- FILE LOCATIONS ---
+
+Service files:   /etc/systemd/system/nesti-nextjs.service
+                 /etc/systemd/system/nesti-scanner.service
+
+Backup:          ~/NESTI/servis/nesti-nextjs.service
+                 ~/NESTI/servis/nesti-scanner.service
+
+Next.js code:    ~/NESTI/nextjs/
+Python code:     ~/NESTI/python/
+Logs backup:     ~/NESTI/servis/
+
+--- NGINX CONFIG ---
+
+Config:          /etc/nginx/sites-available/nesti
+Symlink:         /etc/nginx/sites-enabled/nesti
