@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NESTI Frontend
 
-## Getting Started
+Next.js application dengan Firebase Authentication dan neo-brutalism UI.
 
-First, run the development server:
+## Setup
 
 ```bash
+npm install
+cp .env.example .env
+# Isi .env dengan credentials
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Development server (port 3000) |
+| `npm run build` | Production build |
+| `npm start` | Start production server |
+| `npm run lint` | Run ESLint |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Struktur
 
-## Learn More
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── analyze/        # Security analysis endpoint
+│   │   ├── auth/            # Auth check & sync
+│   │   ├── chat/            # AI chat endpoint
+│   │   ├── history/         # Scan history
+│   │   ├── messages/        # Chat messages
+│   │   ├── monitoring/      # Monitoring CRUD
+│   │   ├── password-check/  # Password strength check
+│   │   ├── reports/         # Reports + PPT export
+│   │   ├── scan/            # Website scan
+│   │   ├── sessions/        # Chat sessions CRUD
+│   │   └── user/            # User profile + limits
+│   ├── chat/                # AI Chat page
+│   ├── history/             # Scan history page
+│   ├── login/               # Login page
+│   ├── monitoring/          # Monitoring dashboard
+│   ├── register/            # Register page
+│   ├── reports/             # Reports page
+│   ├── scan/                # Security scan page
+│   ├── telegram/            # Telegram link page
+│   └── tools/password/      # Password analyzer
+├── components/
+│   ├── ChatBot.tsx          # Floating chat widget
+│   ├── HeroIntro.tsx        # Scroll-driven intro animation
+│   ├── NestiLogo.tsx        # SVG logo component
+│   ├── Navbar.tsx           # Navigation bar
+│   └── IntroWrapper.tsx     # Intro overlay (unused)
+└── lib/
+    ├── api.ts               # Auth fetch wrapper
+    ├── auth-context.tsx     # Firebase auth context
+    ├── db.ts                # PostgreSQL connection
+    └── firebase.ts          # Firebase config
+```
 
-To learn more about Next.js, take a look at the following resources:
+## API Endpoints (Internal)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Scan
+```
+POST /api/scan
+Body: { url: string }
+Response: { scan_id, findings, security_headers, ... }
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Chat
+```
+POST /api/chat
+Body: { session_id: string, content: string }
+Headers: x-firebase-uid: <uid>
+Response: { reply: string }
+```
 
-## Deploy on Vercel
+### Sessions
+```
+GET    /api/sessions          # List sessions
+POST   /api/sessions          # Create session
+DELETE /api/sessions          # Delete session
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### User
+```
+GET    /api/user/profile      # Get profile
+PATCH  /api/user/profile      # Update profile
+GET    /api/user/limits       # Get hourly limits
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Reports
+```
+GET  /api/reports             # List reports
+POST /api/reports             # Create report
+POST /api/reports/export      # Export PPT
+```
+
+## Environment Variables
+
+Lihat `.env.example` untuk lengkap.
+
+Key variables:
+- `DATABASE_URL` - NeonDB connection string
+- `FIREBASE_SERVICE_ACCOUNT` - Firebase admin JSON
+- `NESTI_PYTHON_URL` - Python API URL (http://127.0.0.1:8090)
+- `NESTI_PYTHON_API_KEY` - API key untuk Python service
