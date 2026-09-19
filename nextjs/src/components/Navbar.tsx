@@ -11,9 +11,9 @@ import { NestiLogo } from "./NestiLogo";
 
 const NAV_LINKS = [
   { href: "/", label: "HOME" },
-  { href: "/scan", label: "SCAN" },
+  { href: "/scan", label: "WEBSITE" },
   { href: "/chat", label: "CHAT" },
-  { href: "/tools/password", label: "TOOLS" },
+  { href: "/tools/password", label: "PASSWORD" },
   { href: "/monitoring", label: "MONITOR" },
   { href: "/reports", label: "REPORTS" },
   { href: "/telegram", label: "TELEGRAM" },
