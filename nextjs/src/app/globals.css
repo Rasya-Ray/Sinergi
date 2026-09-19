@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+@theme {
+  --color-neo-black: #1a1a2e;
+  --color-neo-white: #f5f5f5;
+  --color-neo-yellow: #ffe66d;
+  --color-neo-pink: #ff6b6b;
+  --color-neo-blue: #4ecdc4;
+  --color-neo-purple: #a855f7;
+  --color-neo-green: #22c55e;
+  --color-neo-orange: #ff9f43;
+  --color-neo-shadow: #1a1a2e;
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-neo-white);
+  color: var(--color-neo-black);
+  font-family: var(--font-sans);
+}
+
+.neo-card {
+  background: white;
+  border: 3px solid var(--color-neo-black);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--color-neo-shadow);
+  transition: all 0.15s ease;
+}
+
+.neo-card:hover {
+  box-shadow: 3px 3px 0 var(--color-neo-shadow);
+  transform: translate(3px, 3px);
+}
+
+.neo-btn {
+  background: var(--color-neo-yellow);
+  border: 3px solid var(--color-neo-black);
+  box-shadow: 4px 4px 0 var(--color-neo-black);
+  padding: 12px 24px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.neo-btn:hover {
+  box-shadow: 2px 2px 0 var(--color-neo-black);
+  transform: translate(2px, 2px);
+}
+
+.neo-btn:active {
+  box-shadow: 0px 0px 0 var(--color-neo-black);
+  transform: translate(4px, 4px);
+}
+
+.neo-btn-primary {
+  background: var(--color-neo-blue);
+}
+
+.neo-btn-danger {
+  background: var(--color-neo-pink);
+}
+
+.neo-btn-purple {
+  background: var(--color-neo-purple);
+  color: white;
+}
+
+.neo-input {
+  border: 3px solid var(--color-neo-black);
+  padding: 12px 16px;
+  font-size: 1rem;
+  background: white;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.neo-input:focus {
+  box-shadow: 4px 4px 0 var(--color-neo-purple);
+  border-color: var(--color-neo-purple);
+}
+
+.neo-badge {
+  display: inline-block;
+  border: 2px solid var(--color-neo-black);
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.severity-high {
+  background: var(--color-neo-pink);
+  color: white;
+}
+
+.severity-medium {
+  background: var(--color-neo-orange);
+}
+
+.severity-low {
+  background: var(--color-neo-green);
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-neo-white);
+  border-left: 3px solid var(--color-neo-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neo-yellow);
+  border: 2px solid var(--color-neo-black);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes glitch {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-glitch:hover {
+  animation: glitch 0.3s ease infinite;
+}
+
+@keyframes logo-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(15deg) scale(1.1); }
+  50% { transform: rotate(-10deg) scale(1.05); }
+  75% { transform: rotate(8deg) scale(1.1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.logo-spin {
+  transition: transform 0.2s ease;
+}
+
+.logo-spin:hover {
+  animation: logo-spin 0.6s ease-in-out;
+}
+
+.logo-spin:active {
+  animation: logo-spin 0.3s ease-in-out;
+}

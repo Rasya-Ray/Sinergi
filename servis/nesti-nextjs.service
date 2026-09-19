@@ -1,0 +1,16 @@
+[Unit]
+Description=NESTI Next.js Frontend
+After=network.target nesti-scanner.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/NESTI/nextjs
+ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
