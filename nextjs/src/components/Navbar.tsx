@@ -6,7 +6,8 @@ import { useAuth } from "@/lib/auth-context";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { useState } from "react";
-import { Menu, X, Zap } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import { NestiLogo } from "./NestiLogo";
 
 const NAV_LINKS = [
   { href: "/", label: "HOME" },
@@ -35,7 +36,7 @@ export function Navbar() {
       <nav className="hidden lg:flex border-b-3 border-neo-black bg-neo-yellow">
         <Link href="/" className="flex items-center gap-3 px-6 py-3 border-r-3 border-neo-black cursor-pointer">
           <div className="logo-spin w-12 h-12 bg-neo-yellow flex items-center justify-center">
-            <Zap className="w-7 h-7 text-white" />
+            <NestiLogo className="w-7 h-7" />
           </div>
           <span className="font-bold text-xl tracking-tight">NESTI</span>
         </Link>
@@ -77,7 +78,7 @@ export function Navbar() {
       <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b-3 border-neo-black bg-neo-yellow">
         <Link href="/" className="flex items-center gap-2">
           <div className="logo-spin w-10 h-10 bg-neo-yellow flex items-center justify-center">
-            <Zap className="w-6 h-6 text-white" />
+            <NestiLogo className="w-6 h-6" />
           </div>
           <span className="font-bold text-lg">NESTI</span>
         </Link>
@@ -100,7 +101,7 @@ export function Navbar() {
             <div className="flex items-center justify-between px-4 py-3 border-b-3 border-neo-black bg-neo-purple">
               <div className="flex items-center gap-2">
                 <div className="logo-spin w-8 h-8 bg-neo-yellow flex items-center justify-center cursor-pointer">
-                  <Zap className="w-5 h-5 text-white" />
+                  <NestiLogo className="w-5 h-5" />
                 </div>
                 <span className="font-bold text-white text-lg">NESTI</span>
               </div>

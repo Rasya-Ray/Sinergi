@@ -59,21 +59,48 @@ def link_telegram(tg_id: int, tg_username: str, email: str):
     row = cur.fetchone()
     if not row:
         conn.close()
-        return False
-    cur.execute(
-        "UPDATE users SET telegram_id = %s, telegram_username = %s WHERE email = %s",
-        (tg_id, tg_username, email),
-    )
-    conn.commit()
-    cur.execute(
-        """INSERT INTO tg_chat_sessions (telegram_id, user_id)
-        VALUES (%s, %s) ON CONFLICT (telegram_id)
-        DO UPDATE SET user_id = EXCLUDED.user_id, is_active = TRUE""",
-        (tg_id, row[0]),
-    )
+        return False, "Email tidak ditemukan"
+
+    cur.execute("SELECT id FROM users WHERE telegram_id = %s AND email != %s", (tg_id, email,))
+    existing = cur.fetchone()
+    if existing:
+        conn.close()
+        return False, "Telegram ini sudah terlink ke akun lain"
+
+    try:
+        cur.execute(
+            "UPDATE users SET telegram_id = %s, telegram_username = %s WHERE email = %s",
+            (tg_id, tg_username, email),
+        )
+        conn.commit()
+        cur.execute(
+            """INSERT INTO tg_chat_sessions (telegram_id, user_id)
+            VALUES (%s, %s) ON CONFLICT (telegram_id)
+            DO UPDATE SET user_id = EXCLUDED.user_id, is_active = TRUE""",
+            (tg_id, row[0]),
+        )
+        conn.commit()
+        conn.close()
+        return True, "Berhasil link!"
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Gagal link: {str(e)[:100]}"
+
+
+def unlink_telegram(tg_id: int):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE telegram_id = %s", (tg_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return False, "Akun belum terlink"
+    cur.execute("UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = %s", (tg_id,))
+    cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
     conn.commit()
     conn.close()
-    return True
+    return True, "Berhasil unlink akun Telegram"
 
 
 def check_hourly_limit(user_id, limit_type: str, limit: int):
@@ -182,6 +209,8 @@ def format_findings(findings: list) -> str:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     user = update.effective_user
     existing = get_user_by_tg_id(user.id)
     if existing:
@@ -199,26 +228,38 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     user = update.effective_user
     if not context.args:
         await update.message.reply_text("Gunakan: /link email@kamu.com")
         return
     email = context.args[0]
-    ok = link_telegram(user.id, user.username or "", email)
+    ok, msg = link_telegram(user.id, user.username or "", email)
     if ok:
         await update.message.reply_text(
             f"Berhasil link! Akun NESTI ({email}) sudah terhubung.\n\n"
             "Ketik /help untuk melihat semua command."
         )
     else:
-        await update.message.reply_text(
-            "Email tidak ditemukan. Pastikan email sudah terdaftar di NESTI."
-        )
+        await update.message.reply_text(msg)
+
+
+async def cmd_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    user = update.effective_user
+    ok, msg = unlink_telegram(user.id)
+    await update.message.reply_text(msg)
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     await update.message.reply_text(
         "NESTI Bot Commands:\n\n"
+        "/link <email> - Link akun NESTI\n"
+        "/unlink - Unlink akun Telegram\n"
         "/ai <pesan> - Chat AI Security Analyst\n"
         "/laporan - Laporan monitoring per URL\n"
         "/scan <url> - Scan website\n"
@@ -229,6 +270,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     user = update.effective_user
     existing = get_user_by_tg_id(user.id)
     if not existing:
@@ -254,6 +297,8 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     user = update.effective_user
     existing = get_user_by_tg_id(user.id)
     if not existing:
@@ -315,6 +360,8 @@ async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     user = update.effective_user
     existing = get_user_by_tg_id(user.id)
     if not existing:
@@ -356,6 +403,8 @@ async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
     user = update.effective_user
     existing = get_user_by_tg_id(user.id)
     if not existing:
@@ -387,6 +436,7 @@ def create_bot_app() -> Application:
     app = Application.builder().token(TG_TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("link", cmd_link))
+    app.add_handler(CommandHandler("unlink", cmd_unlink))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("ai", cmd_ai))
     app.add_handler(CommandHandler("laporan", cmd_laporan))

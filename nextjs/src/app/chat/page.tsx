@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
@@ -41,6 +41,17 @@ export default function ChatPage() {
     if (data.session) { setSessions(prev => [data.session, ...prev]); setActiveSession(data.session.id); setMessages([]); }
   }
 
+  async function deleteSession(sessionId: string) {
+    if (!confirm("Delete this session?")) return;
+    await authFetch("/api/sessions", { method: "DELETE", body: JSON.stringify({ session_id: sessionId }) });
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
+    if (activeSession === sessionId) {
+      const remaining = sessions.filter(s => s.id !== sessionId);
+      setActiveSession(remaining.length > 0 ? remaining[0].id : null);
+      setMessages([]);
+    }
+  }
+
   async function sendMessage() {
     if (!input.trim() || sending || !activeSession) return;
     const userMsg = { id: Date.now().toString(), role: "user", content: input };
@@ -77,10 +88,14 @@ export default function ChatPage() {
             </button>
             <div className="space-y-2">
               {sessions.map(s => (
-                <button key={s.id} onClick={() => setActiveSession(s.id)}
-                  className={`w-full text-left px-4 py-3 font-semibold uppercase text-sm border-3 border-neo-black ${activeSession === s.id ? "bg-neo-black text-neo-yellow" : "bg-white hover:bg-neo-yellow/30"}`}>
-                  {s.title}
-                </button>
+                <div key={s.id} className={`flex items-center border-3 border-neo-black ${activeSession === s.id ? "bg-neo-black text-neo-yellow" : "bg-white hover:bg-neo-yellow/30"}`}>
+                  <button onClick={() => setActiveSession(s.id)} className="flex-1 text-left px-4 py-3 font-semibold uppercase text-sm">
+                    {s.title}
+                  </button>
+                  <button onClick={() => deleteSession(s.id)} className="px-3 py-3 hover:text-neo-pink transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
