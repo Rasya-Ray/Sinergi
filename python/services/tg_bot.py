@@ -24,6 +24,7 @@ SCAN_HOURLY_LIMIT = 10
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from services.scanner import SecurityScanner
+from services.report_gen import generate_pdf, generate_excel, generate_docx, generate_pptx
 _scanner = SecurityScanner()
 
 # Track users in AI chat mode: {telegram_id: True}
@@ -330,6 +331,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/laporan - Laporan monitoring per URL\n"
         "/scan <url> - Scan website\n"
         "/status - Status monitoring\n"
+        "/report <nomor> <format> - Download report\n"
         "/help - Tampilkan bantuan ini\n\n"
         f"Limit per jam: AI={AI_HOURLY_LIMIT}, Laporan={REPORT_HOURLY_LIMIT}, Scan={SCAN_HOURLY_LIMIT}\n\n"
         "WAJIB: Semua command kecuali /help dan /link\n"
@@ -557,6 +559,144 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text[:4000])
 
 
+# ============ REPORT GENERATION ============
+
+REPORT_FORMATS = {
+    "pdf": {"ext": ".pdf", "label": "PDF"},
+    "xlsx": {"ext": ".xlsx", "label": "Excel"},
+    "docx": {"ext": ".docx", "label": "Word"},
+    "pptx": {"ext": ".pptx", "label": "PowerPoint"},
+}
+
+
+def get_report_data(user_id, monitor_url):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        """SELECT id, target_url, findings, security_headers, created_at
+        FROM scans WHERE user_id = %s AND target_url LIKE %s
+        ORDER BY created_at DESC LIMIT 1""",
+        (user_id, f"%{monitor_url}%"),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None, []
+    findings = row[2] or []
+    scan_data = {
+        "security_headers": row[3] or {},
+    }
+    return {"url": row[1], "created_at": row[4], "scan_data": scan_data}, findings
+
+
+async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    user = update.effective_user
+    existing = await require_linked(update, user)
+    if not existing:
+        return
+
+    allowed, count = check_hourly_limit(existing["id"], "report_count", REPORT_HOURLY_LIMIT)
+    if not allowed:
+        await update.message.reply_text(
+            f"Limit jam ini sudah habis ({REPORT_HOURLY_LIMIT}/{REPORT_HOURLY_LIMIT}).\nCoba lagi jam berikutnya."
+        )
+        return
+
+    monitors = get_user_monitors(existing["id"])
+    if not monitors:
+        await update.message.reply_text(
+            "Belum ada monitoring aktif.\n\n"
+            "Tambah monitoring dulu di https://nesti.kelvinfadillah.web.id/monitoring\n"
+            "Setelah ada monitoring, baru bisa generate report."
+        )
+        return
+
+    if not context.args:
+        monitor_list = "\n".join(
+            f"  {i}. {m['url']}" for i, m in enumerate(monitors, 1)
+        )
+        format_list = "\n".join(
+            f"  {k} - {v['label']}" for k, v in REPORT_FORMATS.items()
+        )
+        await update.message.reply_text(
+            "Usage: /report <nomor_monitor> <format>\n\n"
+            "Monitor yang tersedia:\n"
+            f"{monitor_list}\n\n"
+            "Format yang tersedia:\n"
+            f"{format_list}\n\n"
+            "Contoh: /report 1 pdf\n"
+            "Contoh: /report 2 xlsx\n"
+            "Contoh: /report all pdf (semua monitor)"
+        )
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Gunakan: /report <nomor> <format>\nKetik /report untuk bantuan.")
+        return
+
+    monitor_arg = context.args[0].lower()
+    fmt = context.args[1].lower()
+
+    if fmt not in REPORT_FORMATS:
+        format_list = ", ".join(REPORT_FORMATS.keys())
+        await update.message.reply_text(
+            f"Format '{fmt}' tidak tersedia.\nFormat yang tersedia: {format_list}"
+        )
+        return
+
+    if monitor_arg == "all":
+        target_monitors = monitors
+    else:
+        try:
+            idx = int(monitor_arg) - 1
+            if idx < 0 or idx >= len(monitors):
+                await update.message.reply_text(f"Nomor monitor tidak valid. Pilih 1-{len(monitors)}.")
+                return
+            target_monitors = [monitors[idx]]
+        except ValueError:
+            await update.message.reply_text("Nomor monitor harus angka atau 'all'.")
+            return
+
+    await update.message.reply_text(f"Membuat report {REPORT_FORMATS[fmt]['label']}...")
+
+    for mon in target_monitors:
+        url = mon["url"]
+        scan_info, findings = get_report_data(existing["id"], url)
+
+        if not scan_info:
+            await update.message.reply_text(
+                f"Belum ada data scan untuk {url}.\n"
+                "Scan dulu: /scan <url>"
+            )
+            continue
+
+        try:
+            if fmt == "pdf":
+                file_path = generate_pdf(url, findings, scan_info["scan_data"], scan_info["created_at"])
+            elif fmt == "xlsx":
+                file_path = generate_excel(url, findings, scan_info["scan_data"], scan_info["created_at"])
+            elif fmt == "docx":
+                file_path = generate_docx(url, findings, scan_info["scan_data"], scan_info["created_at"])
+            elif fmt == "pptx":
+                file_path = generate_pptx(url, findings, scan_info["scan_data"], scan_info["created_at"], style="cyberpunk")
+
+            filename = f"NESTI_Report_{url.replace('https://', '').replace('http://', '').replace('/', '_')}_{now_wib().strftime('%Y%m%d_%H%M')}{REPORT_FORMATS[fmt]['ext']}"
+
+            with open(file_path, "rb") as f:
+                await update.message.reply_document(
+                    document=f,
+                    filename=filename,
+                    caption=f"Report: {url}\nFormat: {REPORT_FORMATS[fmt]['label']}\nFindings: {len(findings)}\nDate: {fmt_time(scan_info['created_at'])}",
+                )
+
+            os.unlink(file_path)
+
+        except Exception as e:
+            await update.message.reply_text(f"Gagal generate report untuk {url}: {str(e)[:200]}")
+
+
 # ============ DELETE HISTORY HANDLER ============
 
 async def handle_deleted_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -581,6 +721,7 @@ def create_bot_app() -> Application:
     app.add_handler(CommandHandler("laporan", cmd_laporan))
     app.add_handler(CommandHandler("scan", cmd_scan))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("report", cmd_report))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
     return app
 
