@@ -1,0 +1,9 @@
+[Unit]
+Description=NESTI Security Monitor Runner
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/NESTI/python
+ExecStart=/root/NESTI/python/.venv/bin/python monitor_runner.py
+Environment=DATABASE_URL=postgresql://neondb_owner:npg_Zd4mRIq9PCjk@ep-square-hill-b3y1avud-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+Environment=NESTI_PYTHON_URL=http://127.0.0.1:8090
