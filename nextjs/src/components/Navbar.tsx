@@ -99,12 +99,12 @@ export function Navbar() {
             onClick={() => setMobileOpen(false)}
           />
           <div className="absolute right-0 top-0 h-full w-72 bg-neo-white border-l-3 border-neo-black shadow-[-6px_0_0_#1a1a2e] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b-3 border-neo-black bg-neo-purple">
+            <div className="flex items-center justify-between px-4 py-3 border-b-3 border-neo-black bg-neo-yellow">
               <div className="flex items-center gap-2">
                 <div className="logo-spin w-8 h-8 bg-neo-yellow flex items-center justify-center cursor-pointer">
                   <NestiLogo className="w-5 h-5" />
                 </div>
-                <span className="font-bold text-white text-lg">NESTI</span>
+                <span className="font-bold text-neo-black text-lg">NESTI</span>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
