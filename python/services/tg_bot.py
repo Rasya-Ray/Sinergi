@@ -1,11 +1,13 @@
 import os
 import sys
+import re
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 
 logger = logging.getLogger("tg_bot")
 
@@ -27,8 +29,30 @@ from services.scanner import SecurityScanner
 from services.report_gen import generate_pdf, generate_excel, generate_docx, generate_pptx
 _scanner = SecurityScanner()
 
-# Track users in AI chat mode: {telegram_id: True}
 ai_chat_mode = {}
+_user_cache = {}
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        _pool = ThreadedConnectionPool(2, 10, DB_URL)
+    return _pool
+
+
+def get_db():
+    return _get_pool().getconn()
+
+
+def put_db(conn):
+    try:
+        _get_pool().putconn(conn)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def now_wib():
@@ -43,44 +67,50 @@ def fmt_time(dt):
     return dt.astimezone(WIB).strftime("%d %b %Y %H:%M WIB")
 
 
-def get_db():
-    return psycopg2.connect(DB_URL)
-
-
 def get_user_by_tg_id(tg_id: int):
+    cached = _user_cache.get(tg_id)
+    if cached:
+        return cached
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, name, email FROM users WHERE telegram_id = %s", (tg_id,))
-    row = cur.fetchone()
-    conn.close()
-    return {"id": row[0], "name": row[1], "email": row[2]} if row else None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, email FROM users WHERE telegram_id = %s", (tg_id,))
+        row = cur.fetchone()
+        if row:
+            result = {"id": row[0], "name": row[1], "email": row[2]}
+            _user_cache[tg_id] = result
+            return result
+        return None
+    finally:
+        put_db(conn)
+
+
+def invalidate_user_cache(tg_id: int):
+    _user_cache.pop(tg_id, None)
 
 
 def link_telegram(tg_id: int, tg_username: str, email: str):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, name FROM users WHERE email = %s", (email,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        return False, (
-            f"Email '{email}' tidak terdaftar di NESTI.\n\n"
-            "Silakan daftar dulu di https://nesti.kelvinfadillah.web.id/register\n"
-            "Setelah daftar, baru bisa link."
-        )
-
-    cur.execute("SELECT id FROM users WHERE telegram_id = %s AND email != %s", (tg_id, email,))
-    existing = cur.fetchone()
-    if existing:
-        conn.close()
-        return False, "Telegram ini sudah terlink ke akun lain"
-
     try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, name FROM users WHERE email = %s", (email,))
+        row = cur.fetchone()
+        if not row:
+            return False, (
+                f"Email '{email}' tidak terdaftar di NESTI.\n\n"
+                "Silakan daftar dulu di https://nesti.kelvinfadillah.web.id/register\n"
+                "Setelah daftar, baru bisa link."
+            )
+
+        cur.execute("SELECT id FROM users WHERE telegram_id = %s AND email != %s", (tg_id, email,))
+        existing = cur.fetchone()
+        if existing:
+            return False, "Telegram ini sudah terlink ke akun lain"
+
         cur.execute(
             "UPDATE users SET telegram_id = %s, telegram_username = %s WHERE email = %s",
             (tg_id, tg_username, email),
         )
-        conn.commit()
         cur.execute(
             """INSERT INTO tg_chat_sessions (telegram_id, user_id)
             VALUES (%s, %s) ON CONFLICT (telegram_id)
@@ -88,83 +118,99 @@ def link_telegram(tg_id: int, tg_username: str, email: str):
             (tg_id, row[0]),
         )
         conn.commit()
-        conn.close()
+        invalidate_user_cache(tg_id)
         return True, f"Berhasil link! Selamat datang, {row[1]}."
     except Exception as e:
         conn.rollback()
-        conn.close()
         return False, f"Gagal link: {str(e)[:100]}"
+    finally:
+        put_db(conn)
 
 
 def unlink_telegram(tg_id: int):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id FROM users WHERE telegram_id = %s", (tg_id,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        return False, "Akun belum terlink"
-    cur.execute("UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = %s", (tg_id,))
-    cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
-    conn.commit()
-    conn.close()
-    ai_chat_mode.pop(tg_id, None)
-    return True, "Berhasil unlink akun Telegram"
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM users WHERE telegram_id = %s", (tg_id,))
+        row = cur.fetchone()
+        if not row:
+            return False, "Akun belum terlink"
+        cur.execute("UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = %s", (tg_id,))
+        cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
+        conn.commit()
+        invalidate_user_cache(tg_id)
+        ai_chat_mode.pop(tg_id, None)
+        return True, "Berhasil unlink akun Telegram"
+    finally:
+        put_db(conn)
 
 
 def reset_user_data(tg_id: int):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id FROM users WHERE telegram_id = %s", (tg_id,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        return False, "Akun belum terlink"
-    user_id = row[0]
-    cur.execute("UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = %s", (tg_id,))
-    cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
-    cur.execute("DELETE FROM tg_hourly_limits WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM monitoring WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM scans WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM reports WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM chat_sessions WHERE user_id = %s", (user_id,))
-    conn.commit()
-    conn.close()
-    ai_chat_mode.pop(tg_id, None)
-    return True
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM users WHERE telegram_id = %s", (tg_id,))
+        row = cur.fetchone()
+        if not row:
+            return False, "Akun belum terlink"
+        user_id = row[0]
+        cur.execute("UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = %s", (tg_id,))
+        cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
+        cur.execute("DELETE FROM tg_hourly_limits WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM monitoring WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM scans WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM reports WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM chat_sessions WHERE user_id = %s", (user_id,))
+        conn.commit()
+        invalidate_user_cache(tg_id)
+        ai_chat_mode.pop(tg_id, None)
+        return True
+    finally:
+        put_db(conn)
 
 
 def check_hourly_limit(user_id, limit_type: str, limit: int):
     conn = get_db()
-    cur = conn.cursor()
-    now = now_wib()
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
-    cur.execute(
-        f"""INSERT INTO tg_hourly_limits (user_id, hour_start, {limit_type})
-        VALUES (%s, %s, 1)
-        ON CONFLICT (user_id, hour_start)
-        DO UPDATE SET {limit_type} = tg_hourly_limits.{limit_type} + 1
-        RETURNING {limit_type}""",
-        (user_id, hour_start),
-    )
-    count = cur.fetchone()[0]
-    conn.commit()
-    conn.close()
-    return count <= limit, count
+    try:
+        cur = conn.cursor()
+        now = now_wib()
+        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        cur.execute(
+            f"""INSERT INTO tg_hourly_limits (user_id, hour_start, {limit_type})
+            VALUES (%s, %s, 1)
+            ON CONFLICT (user_id, hour_start)
+            DO UPDATE SET {limit_type} = tg_hourly_limits.{limit_type} + 1
+            RETURNING {limit_type}""",
+            (user_id, hour_start),
+        )
+        count = cur.fetchone()[0]
+        conn.commit()
+        return count <= limit, count
+    finally:
+        put_db(conn)
 
 
 def get_ai_usage(user_id):
     conn = get_db()
-    cur = conn.cursor()
-    now = now_wib()
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
-    cur.execute(
-        "SELECT ai_chat_count FROM tg_hourly_limits WHERE user_id = %s AND hour_start = %s",
-        (user_id, hour_start),
-    )
-    row = cur.fetchone()
-    conn.close()
-    return row[0] if row else 0
+    try:
+        cur = conn.cursor()
+        now = now_wib()
+        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        cur.execute(
+            "SELECT ai_chat_count FROM tg_hourly_limits WHERE user_id = %s AND hour_start = %s",
+            (user_id, hour_start),
+        )
+        row = cur.fetchone()
+        return row[0] if row else 0
+    finally:
+        put_db(conn)
+
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
 
 
 async def call_openclaw(message: str) -> str:
@@ -175,36 +221,44 @@ async def call_openclaw(message: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         if proc.returncode == 0 and stdout:
             output = stdout.decode().strip()
-            if "GatewayClientRequestError" in output:
+            output = _strip_ansi(output)
+            lines = [l for l in output.splitlines()
+                     if not l.startswith("[") and "OPENCLAW" not in l]
+            output = "\n".join(lines).strip()
+            if not output or "GatewayClientRequestError" in output:
                 return ""
             return output[:2000]
-    except Exception:
-        pass
+    except asyncio.TimeoutError:
+        logger.warning("openclaw agent timed out after 30s")
+    except Exception as e:
+        logger.error(f"openclaw agent error: {e}")
     return ""
 
 
 def get_user_monitors(user_id):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        """SELECT id, target_url, status, schedule, schedule_type,
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, target_url, status, schedule, schedule_type,
            schedule_interval_minutes, last_run, next_run
            FROM monitoring WHERE user_id = %s AND status = 'active'""",
-        (user_id,),
-    )
-    rows = cur.fetchall()
-    conn.close()
-    return [
-        {
-            "id": r[0], "url": r[1], "status": r[2], "schedule": r[3],
-            "schedule_type": r[4], "interval_minutes": r[5],
-            "last_run": r[6], "next_run": r[7],
-        }
-        for r in rows
-    ]
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "id": r[0], "url": r[1], "status": r[2], "schedule": r[3],
+                "schedule_type": r[4], "interval_minutes": r[5],
+                "last_run": r[6], "next_run": r[7],
+            }
+            for r in rows
+        ]
+    finally:
+        put_db(conn)
 
 
 async def require_linked(update: Update, user) -> dict | None:
@@ -222,31 +276,35 @@ async def require_linked(update: Update, user) -> dict | None:
 
 def get_latest_scan_for_url(user_id, url: str):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, target_url, findings, created_at FROM scans WHERE user_id = %s AND target_url LIKE %s ORDER BY created_at DESC LIMIT 1",
-        (user_id, f"%{url}%"),
-    )
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {"id": str(row[0]), "url": row[1], "findings": row[2], "created_at": row[3]}
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, target_url, findings, created_at FROM scans WHERE user_id = %s AND target_url LIKE %s ORDER BY created_at DESC LIMIT 1",
+            (user_id, f"%{url}%"),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {"id": str(row[0]), "url": row[1], "findings": row[2], "created_at": row[3]}
+    finally:
+        put_db(conn)
 
 
 def get_reports_for_user(user_id):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, report_type, target_url, content, created_at FROM reports WHERE user_id = %s ORDER BY created_at DESC LIMIT 10",
-        (user_id,),
-    )
-    rows = cur.fetchall()
-    conn.close()
-    return [
-        {"id": str(r[0]), "type": r[1], "url": r[2], "content": r[3], "created_at": r[4]}
-        for r in rows
-    ]
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, report_type, target_url, content, created_at FROM reports WHERE user_id = %s ORDER BY created_at DESC LIMIT 10",
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        return [
+            {"id": str(r[0]), "type": r[1], "url": r[2], "content": r[3], "created_at": r[4]}
+            for r in rows
+        ]
+    finally:
+        put_db(conn)
 
 
 async def do_scan(url: str) -> dict:
@@ -364,16 +422,16 @@ async def cmd_whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
     used = get_ai_usage(existing["id"])
     in_ai_mode = ai_chat_mode.get(user.id, False)
 
-    text = f"IDENTITAS ANDA\n\n"
+    text = "IDENTITAS ANDA\n\n"
     text += f"  Nama: {existing['name'] or '-'}\n"
     text += f"  Email: {existing['email']}\n"
     text += f"  Telegram: @{user.username or '-'}\n"
     text += f"  User ID: {user.id}\n\n"
-    text += f"STATUS AI CHAT\n\n"
+    text += "STATUS AI CHAT\n\n"
     text += f"  Mode: {'AKTIF' if in_ai_mode else 'Nonaktif'}\n"
     text += f"  Penggunaan jam ini: {used}/{AI_HOURLY_LIMIT}\n\n"
-    text += f"Ketik /ai <pesan> untuk mulai chat AI.\n"
-    text += f"Ketik /stopai untuk keluar dari mode AI."
+    text += "Ketik /ai <pesan> untuk mulai chat AI.\n"
+    text += "Ketik /stopai untuk keluar dari mode AI."
 
     await update.message.reply_text(text)
 
@@ -426,7 +484,7 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
         thinking_msg = await update.message.reply_text("Berpikir...")
         reply = await call_openclaw(message)
         if not reply:
-            reply = "Maaf, AI sedang tidak tersedia atau timeout (15 detik). Coba pesan lebih pendek."
+            reply = "Maaf, AI sedang tidak tersedia atau timeout (30 detik). Coba pesan lebih pendek."
         try:
             await thinking_msg.edit_text(reply)
         except Exception:
@@ -481,7 +539,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     thinking_msg = await update.message.reply_text("Berpikir...")
     reply = await call_openclaw(message)
     if not reply:
-        reply = "Maaf, AI sedang tidak tersedia atau timeout (15 detik). Coba pesan lebih pendek."
+        reply = "Maaf, AI sedang tidak tersedia atau timeout (30 detik). Coba pesan lebih pendek."
     try:
         await thinking_msg.edit_text(reply)
     except Exception:
@@ -644,22 +702,24 @@ PPTX_THEMES = {
 
 def get_report_data(user_id, monitor_url):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        """SELECT id, target_url, findings, security_headers, created_at
-        FROM scans WHERE user_id = %s AND target_url LIKE %s
-        ORDER BY created_at DESC LIMIT 1""",
-        (user_id, f"%{monitor_url}%"),
-    )
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None, []
-    findings = row[2] or []
-    scan_data = {
-        "security_headers": row[3] or {},
-    }
-    return {"url": row[1], "created_at": row[4], "scan_data": scan_data}, findings
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, target_url, findings, security_headers, created_at
+            FROM scans WHERE user_id = %s AND target_url LIKE %s
+            ORDER BY created_at DESC LIMIT 1""",
+            (user_id, f"%{monitor_url}%"),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None, []
+        findings = row[2] or []
+        scan_data = {
+            "security_headers": row[3] or {},
+        }
+        return {"url": row[1], "created_at": row[4], "scan_data": scan_data}, findings
+    finally:
+        put_db(conn)
 
 
 async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -686,53 +746,53 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-        if not context.args:
-            monitor_list = "\n".join(
-                f"  {i}. {m['url']}" for i, m in enumerate(monitors, 1)
-            )
-            format_list = "\n".join(
-                f"  {k} - {v['label']}" for k, v in REPORT_FORMATS.items()
-            )
-            theme_list = "\n".join(
-                f"  {k} - {v}" for k, v in PPTX_THEMES.items()
-            )
-            await update.message.reply_text(
-                "Usage: /report <nomor> <format> [theme]\n\n"
-                "Monitor yang tersedia:\n"
-                f"{monitor_list}\n\n"
-                "Format yang tersedia:\n"
-                f"{format_list}\n\n"
-                "Theme PPTX:\n"
-                f"{theme_list}\n\n"
-                "Contoh:\n"
-                "  /report 1 pdf\n"
-                "  /report 2 pptx cyberpunk\n"
-                "  /report 3 pptx cherry-blossom\n"
-                "  /report all xlsx"
-            )
-            return
+    if not context.args:
+        monitor_list = "\n".join(
+            f"  {i}. {m['url']}" for i, m in enumerate(monitors, 1)
+        )
+        format_list = "\n".join(
+            f"  {k} - {v['label']}" for k, v in REPORT_FORMATS.items()
+        )
+        theme_list = "\n".join(
+            f"  {k} - {v}" for k, v in PPTX_THEMES.items()
+        )
+        await update.message.reply_text(
+            "Usage: /report <nomor> <format> [theme]\n\n"
+            "Monitor yang tersedia:\n"
+            f"{monitor_list}\n\n"
+            "Format yang tersedia:\n"
+            f"{format_list}\n\n"
+            "Theme PPTX:\n"
+            f"{theme_list}\n\n"
+            "Contoh:\n"
+            "  /report 1 pdf\n"
+            "  /report 2 pptx cyberpunk\n"
+            "  /report 3 pptx cherry-blossom\n"
+            "  /report all xlsx"
+        )
+        return
 
-        if len(context.args) < 2:
-            await update.message.reply_text("Gunakan: /report <nomor> <format> [theme]\nKetik /report untuk bantuan.")
-            return
+    if len(context.args) < 2:
+        await update.message.reply_text("Gunakan: /report <nomor> <format> [theme]\nKetik /report untuk bantuan.")
+        return
 
-        monitor_arg = context.args[0].lower()
-        fmt = context.args[1].lower()
-        pptx_theme = context.args[2].lower() if len(context.args) > 2 else "cyberpunk"
+    monitor_arg = context.args[0].lower()
+    fmt = context.args[1].lower()
+    pptx_theme = context.args[2].lower() if len(context.args) > 2 else "cyberpunk"
 
-        if fmt not in REPORT_FORMATS:
-            format_list = ", ".join(REPORT_FORMATS.keys())
-            await update.message.reply_text(
-                f"Format '{fmt}' tidak tersedia.\nFormat yang tersedia: {format_list}"
-            )
-            return
+    if fmt not in REPORT_FORMATS:
+        format_list = ", ".join(REPORT_FORMATS.keys())
+        await update.message.reply_text(
+            f"Format '{fmt}' tidak tersedia.\nFormat yang tersedia: {format_list}"
+        )
+        return
 
-        if fmt == "pptx" and pptx_theme not in PPTX_THEMES:
-            theme_list = ", ".join(PPTX_THEMES.keys())
-            await update.message.reply_text(
-                f"Theme '{pptx_theme}' tidak tersedia.\nTheme yang tersedia: {theme_list}"
-            )
-            return
+    if fmt == "pptx" and pptx_theme not in PPTX_THEMES:
+        theme_list = ", ".join(PPTX_THEMES.keys())
+        await update.message.reply_text(
+            f"Theme '{pptx_theme}' tidak tersedia.\nTheme yang tersedia: {theme_list}"
+        )
+        return
 
     if monitor_arg == "all":
         target_monitors = monitors
@@ -747,7 +807,7 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Nomor monitor harus angka atau 'all'.")
             return
 
-            await update.message.reply_text(f"Membuat report {REPORT_FORMATS[fmt]['label']}...")
+    await update.message.reply_text(f"Membuat report {REPORT_FORMATS[fmt]['label']}...")
 
     for mon in target_monitors:
         url = mon["url"]
