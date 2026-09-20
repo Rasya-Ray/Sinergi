@@ -484,7 +484,9 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message:
         ai_chat_mode[user.id] = True
         thinking_msg = await update.message.reply_text("Berpikir...")
-        reply = await call_openclaw(message, user.id)
+        user_name = existing["name"] or user.username or "User"
+        ai_prompt = f"Short concise replies. User: {user_name}.\n{user_name}: {message}"
+        reply = await call_openclaw(ai_prompt, user.id)
         if not reply:
             reply = "Maaf, AI sedang tidak tersedia atau timeout (30 detik). Coba pesan lebih pendek."
         try:
@@ -539,7 +541,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     message = update.message.text
     thinking_msg = await update.message.reply_text("Berpikir...")
-    reply = await call_openclaw(message, user.id)
+    user_name = existing["name"] or user.username or "User"
+    ai_prompt = f"Short concise replies. User: {user_name}.\n{user_name}: {message}"
+    reply = await call_openclaw(ai_prompt, user.id)
     if not reply:
         reply = "Maaf, AI sedang tidak tersedia atau timeout (30 detik). Coba pesan lebih pendek."
     try:
