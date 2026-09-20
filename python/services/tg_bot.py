@@ -713,11 +713,12 @@ def get_report_data(user_id, monitor_url):
     conn = get_db()
     try:
         cur = conn.cursor()
+        domain = monitor_url.replace("https://", "").replace("http://", "").rstrip("/")
         cur.execute(
             """SELECT id, target_url, findings, security_headers, created_at
-            FROM scans WHERE user_id = %s AND target_url LIKE %s
+            FROM scans WHERE user_id = %s AND (target_url LIKE %s OR target_url LIKE %s)
             ORDER BY created_at DESC LIMIT 1""",
-            (user_id, f"%{monitor_url}%"),
+            (user_id, f"%{domain}%", f"%{monitor_url}%"),
         )
         row = cur.fetchone()
         if not row:
