@@ -6,6 +6,7 @@ import { Eye, Plus, Pause, Play, Trash2, Loader2, Globe, Clock, AlertTriangle, C
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 interface Monitor { id: string; target_url: string; check_type: string; schedule: string; schedule_type: string; schedule_hour: number; schedule_minute: number; schedule_day: number; schedule_weekday: number; status: string; last_run: string | null; next_run: string | null; created_at: string; }
 interface HistoryEntry { id: string; scan_data: any; dns_data: any; tls_data: any; changes_detected: any[]; status: string; created_at: string; }
@@ -51,7 +52,15 @@ export default function MonitoringPage() {
   }
 
   async function deleteMonitor(id: string) {
-    try { await authFetch(`/api/monitoring?id=${id}`, { method: "DELETE" }); setMonitors(prev => prev.filter(m => m.id !== id)); } catch {}
+    try {
+      const res = await authFetch(`/api/monitoring?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Monitor deleted");
+        setMonitors(prev => prev.filter(m => m.id !== id));
+      } else {
+        toast.error("Failed to delete monitor");
+      }
+    } catch { toast.error("Failed to delete monitor"); }
   }
 
   async function loadHistory(monitorId: string) {

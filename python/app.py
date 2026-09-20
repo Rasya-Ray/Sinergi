@@ -1,10 +1,14 @@
 import os
+import sys
 import asyncio
 import logging
 import uvicorn
 from config.settings import settings
 
 logger = logging.getLogger("nesti")
+logging.basicConfig(level=logging.INFO)
+
+BOT_TASK = None
 
 
 def main() -> None:
@@ -13,7 +17,7 @@ def main() -> None:
         factory=True,
         host=settings.host,
         port=settings.port,
-        log_level=settings.log_level,
+        log_level="info",
     )
 
 
@@ -41,29 +45,44 @@ def create_app():
 
     @app.on_event("startup")
     async def on_startup():
-        asyncio.create_task(start_telegram_bot())
+        global BOT_TASK
+        print("=== STARTUP: Starting Telegram bot ===", flush=True)
+        BOT_TASK = asyncio.create_task(_run_bot())
+
+    @app.on_event("shutdown")
+    async def on_shutdown():
+        global BOT_TASK
+        if BOT_TASK:
+            BOT_TASK.cancel()
 
     return app
 
 
-async def start_telegram_bot():
+async def _run_bot():
     try:
-        import sys
         sys.path.insert(0, os.path.dirname(__file__))
         from services.tg_bot import create_bot_app, post_init
         from services.tg_scheduler import scheduler_loop
 
+        print("=== Creating bot app ===", flush=True)
         bot_app = create_bot_app()
         await bot_app.initialize()
+        print("=== Bot initialized, calling post_init ===", flush=True)
         await post_init(bot_app)
+        print("=== Starting bot ===", flush=True)
         await bot_app.start()
+        print("=== Starting polling ===", flush=True)
         await bot_app.updater.start_polling(drop_pending_updates=True)
 
-        logger.info("Telegram bot polling started")
+        print("=== Telegram bot polling STARTED ===", flush=True)
         asyncio.create_task(scheduler_loop(bot_app))
 
+        await asyncio.Event().wait()
+
     except Exception as e:
-        logger.error(f"Failed to start Telegram bot: {e}")
+        print(f"=== BOT FAILED: {e} ===", flush=True)
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

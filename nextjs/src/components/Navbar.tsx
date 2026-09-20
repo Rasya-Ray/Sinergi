@@ -13,7 +13,6 @@ const NAV_LINKS = [
   { href: "/", label: "HOME" },
   { href: "/scan", label: "WEBSITE" },
   { href: "/chat", label: "CHAT AI" },
-  { href: "/community", label: "COMMUNITY" },
   { href: "/tools/password", label: "PASSWORD" },
   { href: "/monitoring", label: "MONITOR" },
   { href: "/reports", label: "REPORTS" },

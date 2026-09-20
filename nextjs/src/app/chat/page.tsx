@@ -42,13 +42,17 @@ export default function ChatPage() {
   }
 
   async function deleteSession(sessionId: string) {
-    if (!confirm("Delete this session?")) return;
-    await authFetch("/api/sessions", { method: "DELETE", body: JSON.stringify({ session_id: sessionId }) });
-    setSessions(prev => prev.filter(s => s.id !== sessionId));
-    if (activeSession === sessionId) {
-      const remaining = sessions.filter(s => s.id !== sessionId);
-      setActiveSession(remaining.length > 0 ? remaining[0].id : null);
-      setMessages([]);
+    const res = await authFetch("/api/sessions", { method: "DELETE", body: JSON.stringify({ session_id: sessionId }) });
+    if (res.ok) {
+      toast.success("Session deleted");
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      if (activeSession === sessionId) {
+        const remaining = sessions.filter(s => s.id !== sessionId);
+        setActiveSession(remaining.length > 0 ? remaining[0].id : null);
+        setMessages([]);
+      }
+    } else {
+      toast.error("Failed to delete session");
     }
   }
 

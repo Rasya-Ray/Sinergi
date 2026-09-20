@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
+import CommunityBubble from "@/components/CommunityBubble";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -59,6 +60,7 @@ export default function RootLayout({
           />
           <Navbar />
           {children}
+          <CommunityBubble />
         </AuthProvider>
       </body>
     </html>

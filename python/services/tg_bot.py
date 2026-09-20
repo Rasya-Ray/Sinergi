@@ -423,11 +423,14 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if message:
         ai_chat_mode[user.id] = True
-        await update.message.reply_text("Berpikir...")
+        thinking_msg = await update.message.reply_text("Berpikir...")
         reply = await call_openclaw(message)
         if not reply:
-            reply = "Maaf, AI sedang tidak tersedia. Coba lagi nanti."
-        await update.message.reply_text(reply)
+            reply = "Maaf, AI sedang tidak tersedia atau timeout (15 detik). Coba pesan lebih pendek."
+        try:
+            await thinking_msg.edit_text(reply)
+        except Exception:
+            await update.message.reply_text(reply)
         remaining = AI_HOURLY_LIMIT - count
         if remaining <= 2:
             await update.message.reply_text(f"Sisa limit: {remaining}/{AI_HOURLY_LIMIT}")
@@ -475,11 +478,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     message = update.message.text
-    await update.message.reply_text("Berpikir...")
+    thinking_msg = await update.message.reply_text("Berpikir...")
     reply = await call_openclaw(message)
     if not reply:
-        reply = "Maaf, AI sedang tidak tersedia. Coba lagi nanti."
-    await update.message.reply_text(reply)
+        reply = "Maaf, AI sedang tidak tersedia atau timeout (15 detik). Coba pesan lebih pendek."
+    try:
+        await thinking_msg.edit_text(reply)
+    except Exception:
+        await update.message.reply_text(reply)
     remaining = AI_HOURLY_LIMIT - count
     if remaining <= 2:
         await update.message.reply_text(f"Sisa limit: {remaining}/{AI_HOURLY_LIMIT}")
