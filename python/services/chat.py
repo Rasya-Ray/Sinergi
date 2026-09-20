@@ -1,6 +1,5 @@
 import os
-import subprocess
-import json
+import asyncio
 from schemas.security import ChatRequest, ChatResponse
 
 
@@ -21,47 +20,49 @@ class ChatService:
             scan = req.scan_context
             if scan.get("findings"):
                 for f in scan["findings"][:3]:
-                    context_parts.append(f"[{f.get('severity','?')}] {f.get('detail','')}")
+                    context_parts.append(f"[{f.get('severity','?')}] {f.get('detail','')[:60]}")
             if scan.get("security_headers"):
                 missing = [h for h, v in scan["security_headers"].items() if not v]
                 if missing:
-                    context_parts.append(f"Missing headers: {', '.join(missing[:5])}")
+                    context_parts.append(f"Missing: {', '.join(missing[:5])}")
 
         history_text = ""
-        for item in messages[-6:]:
-            role = "User" if item.get("role") == "user" else "Nesti"
-            history_text += f"{role}: {item.get('content', '')}\n"
+        for item in messages[-4:]:
+            role = "U" if item.get("role") == "user" else "N"
+            history_text += f"{role}: {item.get('content', '')[:100]}\n"
 
         user_name = getattr(req, "user_name", None) or "User"
 
         prompt_parts = []
-        prompt_parts.append(f"You are speaking with {user_name}. Address them by name. Be concise and helpful.")
+        prompt_parts.append(f"Short concise replies. User: {user_name}.")
         if context_parts:
-            prompt_parts.append("Security scan data:\n" + "\n".join(context_parts))
+            prompt_parts.append("Scan:\n" + "\n".join(context_parts))
         if history_text:
-            prompt_parts.append("Conversation history:\n" + history_text)
+            prompt_parts.append("History:\n" + history_text)
         prompt_parts.append(f"{user_name}: {last_msg}")
 
-        full_prompt = "\n\n".join(prompt_parts)
+        full_prompt = "\n".join(prompt_parts)
 
         try:
             reply = await self._call_openclaw(full_prompt)
-            if reply and len(reply.strip()) > 5:
+            if reply and len(reply.strip()) > 3:
                 return ChatResponse(reply=reply.strip(), session_id=req.context.get("session_id", ""), model="nesti-openclaw", provider="openclaw")
-        except Exception as e:
+        except Exception:
             pass
 
         reply = self._smart_fallback(last_msg, context_parts)
         return ChatResponse(reply=reply, session_id=req.context.get("session_id", ""), model="nesti-fallback", provider="fallback")
 
     async def _call_openclaw(self, message: str) -> str:
-        result = subprocess.run(
-            [self.openclaw_bin, "agent", "--agent", self.agent_id, "-m", message],
-            capture_output=True, text=True, timeout=30,
+        proc = await asyncio.create_subprocess_exec(
+            self.openclaw_bin, "agent", "--agent", self.agent_id, "-m", message,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if result.returncode == 0 and result.stdout.strip():
-            output = result.stdout.strip()
-            if "GatewayClientRequestError" in output or "rate_limit" in output or "Rate limit" in output:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+        if proc.returncode == 0 and stdout:
+            output = stdout.decode().strip()
+            if "GatewayClientRequestError" in output or "rate_limit" in output:
                 raise RuntimeError("Rate limited")
             return output
         raise RuntimeError("OpenClaw failed")
@@ -70,32 +71,31 @@ class ChatService:
         msg = message.lower()
 
         if context:
-            lines = []
-            lines.append("Berdasarkan data scan yang tersedia:")
+            lines = ["Berdasarkan data scan:"]
             for c in context:
-                lines.append(f"• {c}")
-            lines.append("\nMau analisis lebih lanjut? Tanya spesifik soal findings, TLS, DNS, atau security headers.")
+                lines.append(f"  {c}")
+            lines.append("\nTanya spesifik soal findings, TLS, DNS, atau headers.")
             return "\n".join(lines)
 
-        if any(w in msg for w in ["hello", "hi", "hey", "halo", "hai", "who", "siapa", "apa"]):
-            return "Halo! Gw Nesti, AI Web Security Analyst. Gw bisa bantu:\n• Scan website buat cari masalah keamanan\n• Cek DNS record & TLS/SSL certificate\n• Analisis security headers\n• Bikin laporan security\n• Cek kekuatan password\n\nMau mulai dari mana?"
+        if any(w in msg for w in ["hello", "hi", "hey", "halo", "hai"]):
+            return "Halo! Gw Nesti, AI Security Analyst. Gw bisa bantu scan website, cek DNS/TLS, analisis headers, dan bikin laporan. Mau mulai dari mana?"
 
-        if any(w in msg for w in ["dns", "domain", "record", "nameserver", "mx "]):
-            return "Mau cek DNS? Kasih domain-nya, nanti gw cek semua record: A, AAAA, MX, NS, TXT, CNAME, CAA, SPF, DMARC, DNSSEC.\n\nKetik domain-nya aja, misal: google.com"
+        if any(w in msg for w in ["dns", "domain", "record"]):
+            return "Kasih domain-nya, nanti gw cek semua DNS record: A, AAAA, MX, NS, TXT, CNAME, SPF, DMARC."
 
-        if any(w in msg for w in ["tls", "ssl", "certificate", "cert", "expiry"]):
-            return "Mau cek TLS/SSL? Kasih domain-nya, nanti gw cek:\n• Certificate validity & expiry\n• Issuer & subject\n• TLS version\n• Certificate chain\n• Cipher suite\n\nKetik domain-nya aja."
+        if any(w in msg for w in ["tls", "ssl", "cert"]):
+            return "Kasih domain-nya, nanti gw cek TLS/SSL: validity, expiry, issuer, TLS version, cipher suite."
 
-        if any(w in msg for w in ["scan", "analyze", "periksa", "cek website"]):
-            return "Mau scan website? Masukin URL di halaman Scan, nanti gw bakal analisis:\n• HTTP headers & security headers\n• TLS/SSL certificate\n• DNS records\n• Technology fingerprinting\n• Security findings\n\nSemua hasil disimpen di history lo."
+        if any(w in msg for w in ["scan", "cek website"]):
+            return "Masukin URL di halaman Scan, gw bakal analisis HTTP headers, TLS, DNS, dan technology fingerprinting."
 
-        if any(w in msg for w in ["password", "pass", "pw"]):
-            return "Mau cek password? Masuk ke halaman Password Checker, langsung keliatan:\n• Strength (Strong/Weak)\n• Waktu brute force\n• Yang perlu diperbaiki\n\nPassword lo gak disimpan."
+        if any(w in msg for w in ["password", "pass"]):
+            return "Masuk ke halaman Password Checker. Password lo gak disimpan, langsung keliatan strength & crack time."
 
         if any(w in msg for w in ["report", "laporan"]):
-            return "Mau bikin laporan security? Di halaman Reports lo bisa generate report dari scan results. Pilih:\n• Full Assessment\n• Technical Report\n• Executive Report\n\nExport ke PDF, JSON, atau CSV."
+            return "Di halaman Reports lo bisa generate report dari scan. Export ke PDF, JSON, atau CSV."
 
-        if any(w in msg for w in ["thank", "thanks", "makasih"]):
-            return "Sama-sama! Kalau butuh bantuan lagi, tanya aja."
+        if any(w in msg for w in ["thank", "makasih"]):
+            return "Sama-sama! Butuh bantuan lagi, tanya aja."
 
-        return "Gw Nesti, AI Security Analyst. Ada yang mau lo tanyain soal keamanan website? Tanya aja langsung."
+        return "Gw Nesti, AI Security Analyst. Ada yang mau lo tanyain soal keamanan website?"

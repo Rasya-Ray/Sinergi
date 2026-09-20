@@ -4,7 +4,6 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
-import ChatBot from "@/components/ChatBot";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -60,7 +59,6 @@ export default function RootLayout({
           />
           <Navbar />
           {children}
-          <ChatBot />
         </AuthProvider>
       </body>
     </html>

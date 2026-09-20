@@ -169,3 +169,8 @@ body {
 .logo-spin:active {
   animation: logo-spin 0.3s ease-in-out;
 }
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

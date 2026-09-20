@@ -81,7 +81,7 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-neo-white">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-20">
-        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-200px)]">
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-180px)]">
           <div className="w-full lg:w-64 flex-shrink-0">
             <button onClick={createSession} className="neo-btn neo-btn-primary w-full flex items-center justify-center gap-2 mb-4">
               <Plus className="w-4 h-4" />New Session
@@ -99,13 +99,13 @@ export default function ChatPage() {
               ))}
             </div>
           </div>
-          <div className="flex-1 neo-card flex flex-col">
-            <div className="p-4 border-b-3 border-neo-black font-bold uppercase">Nesti AI Chat</div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 neo-card flex flex-col min-h-0">
+            <div className="p-4 border-b-3 border-neo-black font-bold uppercase flex-shrink-0">Nesti AI Chat</div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
               {messages.length === 0 && <p className="text-center text-neo-black/50 font-medium mt-8">Ask me anything about web security.</p>}
               {messages.map(m => (
                 <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[80%] px-4 py-3 font-medium text-sm border-3 border-neo-black ${m.role === "user" ? "bg-neo-blue text-white" : "bg-white"}`}>
+                  <div className={`max-w-[80%] px-4 py-3 font-medium text-sm border-3 border-neo-black break-words overflow-wrap-anywhere whitespace-pre-wrap ${m.role === "user" ? "bg-neo-blue text-white" : "bg-white"}`}>
                     {m.content}
                   </div>
                 </div>
@@ -113,7 +113,7 @@ export default function ChatPage() {
               {sending && <div className="flex justify-start"><div className="bg-white border-3 border-neo-black px-4 py-3 text-sm font-medium flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Thinking...</div></div>}
               <div ref={messagesEndRef} />
             </div>
-            <div className="p-4 border-t-3 border-neo-black flex gap-3">
+            <div className="p-4 border-t-3 border-neo-black flex gap-3 flex-shrink-0">
               <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage()}
                 placeholder="Type your message..." className="flex-1 neo-input" disabled={sending} />
               <button onClick={sendMessage} disabled={sending} className="neo-btn neo-btn-primary">SEND</button>

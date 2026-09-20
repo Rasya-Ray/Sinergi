@@ -169,17 +169,18 @@ def get_ai_usage(user_id):
 
 async def call_openclaw(message: str) -> str:
     try:
+        short_msg = message[:500]
         proc = await asyncio.create_subprocess_exec(
-            OPENCLAW_BIN, "agent", "--agent", OPENCLAW_AGENT, "-m", message,
+            OPENCLAW_BIN, "agent", "--agent", OPENCLAW_AGENT, "-m", short_msg,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
         if proc.returncode == 0 and stdout:
             output = stdout.decode().strip()
             if "GatewayClientRequestError" in output:
                 return ""
-            return output
+            return output[:2000]
     except Exception:
         pass
     return ""
@@ -324,7 +325,7 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Akun belum terlink.")
         return
 
-    if context.args and context.args[0] == "confirm":
+    if context.args and context.args[0] == "yes":
         ok = reset_user_data(user.id)
         if ok:
             await update.message.reply_text(
@@ -348,7 +349,7 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "  - Monitoring & Scan\n"
         "  - Reports\n"
         "  - Hourly limits\n\n"
-        "Ketik /reset confirm untuk melanjutkan."
+        "Ketik /reset yes untuk melanjutkan."
     )
 
 
