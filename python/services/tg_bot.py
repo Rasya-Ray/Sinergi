@@ -58,11 +58,15 @@ def get_user_by_tg_id(tg_id: int):
 def link_telegram(tg_id: int, tg_username: str, email: str):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+    cur.execute("SELECT id, name FROM users WHERE email = %s", (email,))
     row = cur.fetchone()
     if not row:
         conn.close()
-        return False, "Email tidak ditemukan"
+        return False, (
+            f"Email '{email}' tidak terdaftar di NESTI.\n\n"
+            "Silakan daftar dulu di https://nesti.kelvinfadillah.web.id/register\n"
+            "Setelah daftar, baru bisa link."
+        )
 
     cur.execute("SELECT id FROM users WHERE telegram_id = %s AND email != %s", (tg_id, email,))
     existing = cur.fetchone()
@@ -84,7 +88,7 @@ def link_telegram(tg_id: int, tg_username: str, email: str):
         )
         conn.commit()
         conn.close()
-        return True, "Berhasil link!"
+        return True, f"Berhasil link! Selamat datang, {row[1]}."
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -179,6 +183,19 @@ def get_user_monitors(user_id):
     ]
 
 
+async def require_linked(update: Update, user) -> dict | None:
+    if not update.message:
+        return None
+    existing = get_user_by_tg_id(user.id)
+    if not existing:
+        await update.message.reply_text(
+            "Akun belum terlink.\n\n"
+            "Ketik /link email@kamu.com dulu untuk menghubungkan akun NESTI."
+        )
+        return None
+    return existing
+
+
 def get_latest_scan_for_url(user_id, url: str):
     conn = get_db()
     cur = conn.cursor()
@@ -243,6 +260,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Halo! Saya NESTI Bot, AI Web Security Analyst.\n\n"
             "Untuk menggunakan bot ini, link akun NESTI kamu:\n"
             "/link email@kamu.com\n\n"
+            "WAJIB: Email harus terdaftar di NESTI.\n"
+            "Daftar dulu di https://nesti.kelvinfadillah.web.id/register\n\n"
             "Ketik /help untuk melihat semua command."
         )
 
@@ -277,12 +296,8 @@ async def cmd_whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     user = update.effective_user
-    existing = get_user_by_tg_id(user.id)
+    existing = await require_linked(update, user)
     if not existing:
-        await update.message.reply_text(
-            "Akun belum terlink.\n\n"
-            "Ketik /link email@kamu.com untuk menghubungkan."
-        )
         return
 
     used = get_ai_usage(existing["id"])
@@ -317,6 +332,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/status - Status monitoring\n"
         "/help - Tampilkan bantuan ini\n\n"
         f"Limit per jam: AI={AI_HOURLY_LIMIT}, Laporan={REPORT_HOURLY_LIMIT}, Scan={SCAN_HOURLY_LIMIT}\n\n"
+        "WAJIB: Semua command kecuali /help dan /link\n"
+        "harus link akun dulu: /link email@kamu.com\n\n"
         "Tips: Setelah ketik /ai, semua pesan berikutnya\n"
         "otomatis chat dengan AI sampai ketik /stopai."
     )
@@ -328,9 +345,8 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     user = update.effective_user
-    existing = get_user_by_tg_id(user.id)
+    existing = await require_linked(update, user)
     if not existing:
-        await update.message.reply_text("Akun belum terlink. Ketik /link email@kamu.com")
         return
 
     allowed, count = check_hourly_limit(existing["id"], "ai_chat_count", AI_HOURLY_LIMIT)
@@ -379,6 +395,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     existing = get_user_by_tg_id(user.id)
     if not existing:
+        ai_chat_mode.pop(user.id, None)
+        await update.message.reply_text(
+            "Akun belum terlink.\n"
+            "Ketik /link email@kamu.com dulu."
+        )
         return
 
     allowed, count = check_hourly_limit(existing["id"], "ai_chat_count", AI_HOURLY_LIMIT)
@@ -407,9 +428,8 @@ async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     user = update.effective_user
-    existing = get_user_by_tg_id(user.id)
+    existing = await require_linked(update, user)
     if not existing:
-        await update.message.reply_text("Akun belum terlink. Ketik /link email@kamu.com")
         return
 
     allowed, count = check_hourly_limit(existing["id"], "report_count", REPORT_HOURLY_LIMIT)
@@ -470,9 +490,8 @@ async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     user = update.effective_user
-    existing = get_user_by_tg_id(user.id)
+    existing = await require_linked(update, user)
     if not existing:
-        await update.message.reply_text("Akun belum terlink. Ketik /link email@kamu.com")
         return
     if not context.args:
         await update.message.reply_text("Gunakan: /scan example.com")
@@ -513,9 +532,8 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     user = update.effective_user
-    existing = get_user_by_tg_id(user.id)
+    existing = await require_linked(update, user)
     if not existing:
-        await update.message.reply_text("Akun belum terlink. Ketik /link email@kamu.com")
         return
 
     monitors = get_user_monitors(existing["id"])
