@@ -73,3 +73,29 @@ Logs backup:     ~/NESTI/servis/
 
 Config:          /etc/nginx/sites-available/nesti
 Symlink:         /etc/nginx/sites-enabled/nesti
+
+--- DATABASE RESET ---
+
+DB URL: postgresql://neondb_owner:npg_Zd4mRIq9PCjk@ep-square-hill-b3y1avud-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+
+Quick Reset (Python):
+  python3 ~/NESTI/python/scripts/reset_db.py
+
+Manual Reset (psql):
+  psql "postgresql://neondb_owner:npg_Zd4mRIq9PCjk@ep-square-hill-b3y1avud-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+
+  DROP TABLE IF EXISTS tg_hourly_limits CASCADE;
+  DROP TABLE IF EXISTS tg_chat_sessions CASCADE;
+  DROP TABLE IF EXISTS chat_messages CASCADE;
+  DROP TABLE IF EXISTS chat_sessions CASCADE;
+  DROP TABLE IF EXISTS reports CASCADE;
+  DROP TABLE IF EXISTS scans CASCADE;
+  DROP TABLE IF EXISTS monitoring CASCADE;
+  DROP TABLE IF EXISTS alerts CASCADE;
+  DROP TABLE IF EXISTS users CASCADE;
+
+  -- Then run the app to recreate tables, or run the SQL in reset_db.py
+
+TG Bot Reset:
+  /reset          - Lihat peringatan
+  /reset confirm  - Hapus semua data user

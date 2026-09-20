@@ -112,6 +112,28 @@ def unlink_telegram(tg_id: int):
     return True, "Berhasil unlink akun Telegram"
 
 
+def reset_user_data(tg_id: int):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE telegram_id = %s", (tg_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return False, "Akun belum terlink"
+    user_id = row[0]
+    cur.execute("UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = %s", (tg_id,))
+    cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
+    cur.execute("DELETE FROM tg_hourly_limits WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM monitoring WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM scans WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM reports WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM chat_sessions WHERE user_id = %s", (user_id,))
+    conn.commit()
+    conn.close()
+    ai_chat_mode.pop(tg_id, None)
+    return True
+
+
 def check_hourly_limit(user_id, limit_type: str, limit: int):
     conn = get_db()
     cur = conn.cursor()
@@ -293,6 +315,43 @@ async def cmd_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 
+async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    user = update.effective_user
+    existing = get_user_by_tg_id(user.id)
+    if not existing:
+        await update.message.reply_text("Akun belum terlink.")
+        return
+
+    if context.args and context.args[0] == "confirm":
+        ok = reset_user_data(user.id)
+        if ok:
+            await update.message.reply_text(
+                "SEMUA DATA TELAH DIHAPUS:\n\n"
+                "  Link akun Telegram\n"
+                "  Chat sessions\n"
+                "  Hourly limits\n"
+                "  Monitoring\n"
+                "  Scans & Reports\n\n"
+                "Akun NESTI kamu masih ada (email), tapi semua data terkait sudah bersih.\n"
+                "Ketik /link email@kamu.com untuk mulai lagi."
+            )
+        else:
+            await update.message.reply_text("Gagal reset data.")
+        return
+
+    await update.message.reply_text(
+        "PERINGATAN: Ini akan menghapus SEMUA data kamu:\n\n"
+        "  - Link Telegram\n"
+        "  - Chat sessions\n"
+        "  - Monitoring & Scan\n"
+        "  - Reports\n"
+        "  - Hourly limits\n\n"
+        "Ketik /reset confirm untuk melanjutkan."
+    )
+
+
 async def cmd_whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -325,6 +384,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "NESTI Bot Commands:\n\n"
         "/link <email> - Link akun NESTI\n"
         "/unlink - Unlink akun Telegram\n"
+        "/reset - Hapus semua data & mulai dari awal\n"
         "/whoami - Info akun Anda\n"
         "/ai <pesan> - Mulai chat AI (mode aktif)\n"
         "/stopai - Keluar dari mode AI chat\n"
@@ -736,6 +796,7 @@ def create_bot_app() -> Application:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("link", cmd_link))
     app.add_handler(CommandHandler("unlink", cmd_unlink))
+    app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CommandHandler("whoami", cmd_whoami))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("ai", cmd_ai))
