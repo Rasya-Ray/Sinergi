@@ -1,0 +1,33 @@
+# --- Firebase client (NEXT_PUBLIC_*) ---
+# Isi dari Firebase console (Project settings → Your apps → Web app)
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyCF3uhZF1t5K29J2Yc3p8JI7cUiPMozEk4
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=nesti-16c62.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=nesti-16c62
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=nesti-16c62.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=15501583085
+NEXT_PUBLIC_FIREBASE_APP_ID=1:15501583085:web:2f2d48177429e167ef62e4
+
+# Firebase Admin (server) — dipakai untuk verifikasi ID token.
+# Isi JSON service account (bisa string JSON atau path file, mis. ./service.json)
+FIREBASE_SERVICE_ACCOUNT=./service.json
+
+# --- Neon PostgreSQL (database utama) ---
+# Connection string POOLED dari Neon: Settings → Connection Details → Pooled connection
+# DATABASE_URL=postgresql://user:password@ep-xxx.aws.neon.tech/nesti?sslmode=require
+DATABASE_URL=postgresql://neondb_owner:npg_Zd4mRIq9PCjk@ep-square-hill-b3y1avud-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+# --- Python AI Service ---
+NESTI_PYTHON_URL=http://127.0.0.1:8090
+# HARUS sama dengan NESTI_API_KEY di env Python
+NESTI_PYTHON_API_KEY=faf34cdcf4beaa5901ad6f256af7b503c7ac5749ec95163ab603893b7321738f
+
+
+# --- WhatsApp ---
+WHATSAPP_PROVIDER=none
+WHATSAPP_API_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_TO_DEFAULT=
+
+NEXTDNS_POLL_SECRET=9cabf793bcaeef67c45a4782e1aedcc3c3c7c2a40335ffb2
+NEXT_PUBLIC_NESTI_PYTHON_URL=http://103.30.146.116:8090
