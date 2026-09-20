@@ -270,32 +270,66 @@ def generate_docx(monitor_url, findings, scan_data, report_date) -> str:
     return path
 
 
+THEMES = {
+    "cyberpunk": {
+        "bg": (0x1A, 0x1A, 0x2E),
+        "accent": (0xFF, 0xE6, 0x6D),
+        "text": (0xFF, 0xFF, 0xFF),
+        "pink": (0xFF, 0x6B, 0x6B),
+        "cyan": (0x4E, 0xCD, 0xC4),
+        "muted": (0xAA, 0xAA, 0xAA),
+        "footer": (0x88, 0x88, 0x88),
+    },
+    "neo-brutalism": {
+        "bg": (0xFA, 0xFA, 0xFA),
+        "accent": (0x1A, 0x1A, 0x2E),
+        "text": (0x1A, 0x1A, 0x2E),
+        "pink": (0xFF, 0x6B, 0x6B),
+        "cyan": (0x4E, 0xCD, 0xC4),
+        "muted": (0x66, 0x66, 0x66),
+        "footer": (0x99, 0x99, 0x99),
+        "border": (0x1A, 0x1A, 0x2E),
+        "yellow": (0xFF, 0xE6, 0x6D),
+        "green": (0x00, 0xB8, 0x94),
+    },
+    "cherry-blossom": {
+        "bg": (0xFF, 0xF5, 0xF5),
+        "accent": (0xE8, 0x6B, 0x8A),
+        "text": (0x4A, 0x30, 0x38),
+        "pink": (0xFF, 0x8B, 0xA1),
+        "cyan": (0xD4, 0x8B, 0xB8),
+        "muted": (0x99, 0x70, 0x7A),
+        "footer": (0xBB, 0x99, 0xA3),
+        "petal": (0xFF, 0xCC, 0xD5),
+        "deep": (0x8B, 0x3A, 0x52),
+    },
+}
+
+
 def generate_pptx(monitor_url, findings, scan_data, report_date, style="cyberpunk") -> str:
     path = tempfile.mktemp(suffix=".pptx")
     prs = Presentation()
     prs.slide_width = PptxInches(13.333)
     prs.slide_height = PptxInches(7.5)
 
-    if style == "cyberpunk":
-        bg_color = PptxRGB(0x1A, 0x1A, 0x2E)
-        accent = PptxRGB(0xFF, 0xE6, 0x6D)
-        text_color = PptxRGB(0xFF, 0xFF, 0xFF)
-        pink = PptxRGB(0xFF, 0x6B, 0x6B)
-        cyan = PptxRGB(0x4E, 0xCD, 0xC4)
-    else:
-        bg_color = PptxRGB(0x1A, 0x1A, 0x2E)
-        accent = PptxRGB(0x4E, 0xCD, 0xC4)
-        text_color = PptxRGB(0xFF, 0xFF, 0xFF)
-        pink = PptxRGB(0xFF, 0x6B, 0x6B)
-        cyan = PptxRGB(0xFF, 0xE6, 0x6D)
+    t = THEMES.get(style, THEMES["cyberpunk"])
+    bg_rgb = PptxRGB(*t["bg"])
+    accent_rgb = PptxRGB(*t["accent"])
+    text_rgb = PptxRGB(*t["text"])
+    pink_rgb = PptxRGB(*t["pink"])
+    cyan_rgb = PptxRGB(*t["cyan"])
+    muted_rgb = PptxRGB(*t["muted"])
+    footer_rgb = PptxRGB(*t["footer"])
 
-    def set_bg(slide):
+    def set_bg(slide, color=None):
         bg = slide.background
         fill = bg.fill
         fill.solid()
-        fill.fore_color.rgb = bg_color
+        fill.fore_color.rgb = color or bg_rgb
 
-    def add_text(slide, left, top, width, height, text, font_size=18, bold=False, color=text_color, align=PP_ALIGN.LEFT):
+    def add_text(slide, left, top, width, height, text, font_size=18, bold=False, color=None, align=PP_ALIGN.LEFT):
+        if color is None:
+            color = text_rgb
         txBox = slide.shapes.add_textbox(PptxInches(left), PptxInches(top), PptxInches(width), PptxInches(height))
         tf = txBox.text_frame
         tf.word_wrap = True
@@ -307,18 +341,46 @@ def generate_pptx(monitor_url, findings, scan_data, report_date, style="cyberpun
         p.alignment = align
         return tf
 
+    def add_shape_rect(slide, left, top, width, height, fill_color, line_color=None):
+        from pptx.enum.shapes import MSO_SHAPE
+        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, PptxInches(left), PptxInches(top), PptxInches(width), PptxInches(height))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = fill_color
+        if line_color:
+            shape.line.color.rgb = line_color
+            shape.line.width = PptxPt(2)
+        else:
+            shape.line.fill.background()
+        return shape
+
+    # ============ SLIDES ============
+
     # Slide 1: Title
     slide1 = prs.slides.add_slide(prs.slide_layouts[6])
     set_bg(slide1)
-    add_text(slide1, 1, 1.5, 11, 1.5, "NESTI", 60, True, accent, PP_ALIGN.CENTER)
-    add_text(slide1, 1, 3, 11, 1, "SECURITY REPORT", 36, True, text_color, PP_ALIGN.CENTER)
-    add_text(slide1, 1, 4.2, 11, 0.8, monitor_url, 20, False, cyan, PP_ALIGN.CENTER)
-    add_text(slide1, 1, 5.5, 11, 0.6, fmt_time(report_date), 16, False, text_color, PP_ALIGN.CENTER)
+
+    if style == "neo-brutalism":
+        add_shape_rect(slide1, 0.8, 1.2, 11.7, 2.5, PptxRGB(*t["yellow"]), bg_rgb)
+        add_text(slide1, 1, 1.4, 11.3, 1.2, "NESTI", 72, True, bg_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 2.6, 11.3, 0.8, "SECURITY REPORT", 32, True, bg_rgb, PP_ALIGN.CENTER)
+        add_shape_rect(slide1, 3, 4.2, 7.3, 0.06, bg_rgb)
+        add_text(slide1, 1, 4.6, 11.3, 0.6, monitor_url, 18, False, muted_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 5.4, 11.3, 0.6, fmt_time(report_date), 14, False, footer_rgb, PP_ALIGN.CENTER)
+    elif style == "cherry-blossom":
+        add_text(slide1, 1, 1.5, 11, 1.5, "~ NESTI ~", 60, True, accent_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 3.2, 11, 0.8, "Security Report", 30, False, text_rgb, PP_ALIGN.CENTER)
+        add_shape_rect(slide1, 5, 4.2, 3.3, 0.04, accent_rgb)
+        add_text(slide1, 1, 4.6, 11, 0.6, monitor_url, 18, False, muted_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 5.4, 11, 0.6, fmt_time(report_date), 14, False, footer_rgb, PP_ALIGN.CENTER)
+    else:
+        add_text(slide1, 1, 1.5, 11, 1.5, "NESTI", 60, True, accent_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 3, 11, 1, "SECURITY REPORT", 36, True, text_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 4.2, 11, 0.8, monitor_url, 20, False, cyan_rgb, PP_ALIGN.CENTER)
+        add_text(slide1, 1, 5.5, 11, 0.6, fmt_time(report_date), 16, False, text_rgb, PP_ALIGN.CENTER)
 
     # Slide 2: Summary
     slide2 = prs.slides.add_slide(prs.slide_layouts[6])
     set_bg(slide2)
-    add_text(slide2, 0.8, 0.5, 11, 1, "SUMMARY", 32, True, accent)
 
     critical = sum(1 for f in findings if f.get("severity", "").lower() == "critical")
     high = sum(1 for f in findings if f.get("severity", "").lower() == "high")
@@ -326,54 +388,108 @@ def generate_pptx(monitor_url, findings, scan_data, report_date, style="cyberpun
     low = sum(1 for f in findings if f.get("severity", "").lower() == "low")
     info = sum(1 for f in findings if f.get("severity", "").lower() == "info")
 
-    summary_items = [
-        (f"Total Findings: {len(findings)}", text_color),
-        (f"Critical: {critical}", pink if critical else text_color),
-        (f"High: {high}", PptxRGB(0xFD, 0xCB, 0x6E) if high else text_color),
-        (f"Medium: {medium}", accent if medium else text_color),
-        (f"Low: {low}", cyan if low else text_color),
-        (f"Info: {info}", text_color),
-    ]
-    y = 1.8
-    for text, color in summary_items:
-        add_text(slide2, 1.5, y, 10, 0.6, text, 22, False, color)
-        y += 0.65
+    if style == "neo-brutalism":
+        add_shape_rect(slide2, 0.8, 0.5, 5, 0.9, accent_rgb)
+        add_text(slide2, 1, 0.55, 4.8, 0.8, "SUMMARY", 30, True, PptxRGB(*t["yellow"]))
 
-    # Slide 3+: Findings (max 5 per slide)
+        card_y = 1.8
+        for label, count, c in [
+            ("TOTAL", len(findings), accent_rgb),
+            ("CRITICAL", critical, pink_rgb),
+            ("HIGH", high, PptxRGB(*t["yellow"])),
+            ("MEDIUM", medium, accent_rgb),
+            ("LOW", low, cyan_rgb),
+        ]:
+            add_shape_rect(slide2, 1, card_y, 4.5, 0.7, PptxRGB(*t["bg"]), accent_rgb)
+            add_text(slide2, 1.2, card_y + 0.1, 2.5, 0.5, label, 16, True, accent_rgb)
+            add_text(slide2, 3.8, card_y + 0.1, 1.5, 0.5, str(count), 16, True, c, PP_ALIGN.RIGHT)
+            card_y += 0.85
+    elif style == "cherry-blossom":
+        add_text(slide2, 0.8, 0.5, 11, 0.8, "~ Summary ~", 30, True, accent_rgb, PP_ALIGN.CENTER)
+        card_y = 1.6
+        for label, count, c in [
+            ("Total Findings", len(findings), text_rgb),
+            ("Critical", critical, pink_rgb),
+            ("High", high, accent_rgb),
+            ("Medium", medium, PptxRGB(*t["cyan"])),
+            ("Low", low, PptxRGB(*t["muted"])),
+        ]:
+            add_shape_rect(slide2, 3.5, card_y, 6.3, 0.6, PptxRGB(*t["petal"]))
+            add_text(slide2, 3.8, card_y + 0.08, 3, 0.45, label, 16, False, text_rgb)
+            add_text(slide2, 7, card_y + 0.08, 2.5, 0.45, str(count), 16, True, c, PP_ALIGN.RIGHT)
+            card_y += 0.72
+    else:
+        add_text(slide2, 0.8, 0.5, 11, 1, "SUMMARY", 32, True, accent_rgb)
+        y = 1.8
+        for text, color in [
+            (f"Total Findings: {len(findings)}", text_rgb),
+            (f"Critical: {critical}", pink_rgb if critical else text_rgb),
+            (f"High: {high}", PptxRGB(0xFD, 0xCB, 0x6E) if high else text_rgb),
+            (f"Medium: {medium}", accent_rgb if medium else text_rgb),
+            (f"Low: {low}", cyan_rgb if low else text_rgb),
+            (f"Info: {info}", text_rgb),
+        ]:
+            add_text(slide2, 1.5, y, 10, 0.6, text, 22, False, color)
+            y += 0.65
+
+    # Slide 3+: Findings
     if findings:
         chunks = [findings[i:i + 5] for i in range(0, len(findings), 15)]
         for chunk_idx, chunk in enumerate(chunks[:3]):
             slide = prs.slides.add_slide(prs.slide_layouts[6])
             set_bg(slide)
             title_text = f"FINDINGS ({chunk_idx * 15 + 1}-{min((chunk_idx + 1) * 15, len(findings))} of {len(findings)})"
-            add_text(slide, 0.8, 0.5, 11, 1, title_text, 28, True, accent)
 
-            y = 1.6
+            if style == "neo-brutalism":
+                add_shape_rect(slide, 0.8, 0.4, 6, 0.8, accent_rgb)
+                add_text(slide, 1, 0.45, 5.6, 0.7, title_text, 24, True, PptxRGB(*t["yellow"]))
+            elif style == "cherry-blossom":
+                add_text(slide, 0.8, 0.4, 11.5, 0.7, title_text, 24, True, accent_rgb, PP_ALIGN.CENTER)
+            else:
+                add_text(slide, 0.8, 0.5, 11, 1, title_text, 28, True, accent_rgb)
+
+            y = 1.5
             for f in chunk:
                 sev = f.get("severity", "?").upper()
                 title = (f.get("title") or f.get("finding") or "?")[:50]
                 detail = (f.get("detail") or f.get("description") or "?")[:70]
 
-                if sev == "CRITICAL":
-                    sev_color = pink
-                elif sev == "HIGH":
-                    sev_color = PptxRGB(0xFD, 0xCB, 0x6E)
-                elif sev == "MEDIUM":
-                    sev_color = accent
-                else:
-                    sev_color = cyan
+                sev_color = pink_rgb if sev == "CRITICAL" else PptxRGB(0xFD, 0xCB, 0x6E) if sev == "HIGH" else accent_rgb if sev == "MEDIUM" else cyan_rgb
 
-                add_text(slide, 1, y, 1.5, 0.4, f"[{sev}]", 14, True, sev_color)
-                add_text(slide, 2.8, y, 9, 0.4, title, 14, True, text_color)
-                add_text(slide, 2.8, y + 0.4, 9, 0.4, detail, 11, False, PptxRGB(0xAA, 0xAA, 0xAA))
+                if style == "neo-brutalism":
+                    add_shape_rect(slide, 0.8, y, 11.7, 0.85, PptxRGB(*t["bg"]), accent_rgb)
+                    add_text(slide, 1, y + 0.05, 1.5, 0.35, f"[{sev}]", 12, True, sev_color)
+                    add_text(slide, 2.8, y + 0.05, 9.5, 0.35, title, 13, True, text_rgb)
+                    add_text(slide, 2.8, y + 0.42, 9.5, 0.35, detail, 10, False, muted_rgb)
+                elif style == "cherry-blossom":
+                    add_shape_rect(slide, 1, y, 11.3, 0.85, PptxRGB(*t["petal"]))
+                    add_text(slide, 1.2, y + 0.05, 1.5, 0.35, f"[{sev}]", 12, True, sev_color)
+                    add_text(slide, 3, y + 0.05, 9, 0.35, title, 13, True, text_rgb)
+                    add_text(slide, 3, y + 0.42, 9, 0.35, detail, 10, False, muted_rgb)
+                else:
+                    add_text(slide, 1, y, 1.5, 0.4, f"[{sev}]", 14, True, sev_color)
+                    add_text(slide, 2.8, y, 9, 0.4, title, 14, True, text_rgb)
+                    add_text(slide, 2.8, y + 0.4, 9, 0.4, detail, 11, False, muted_rgb)
                 y += 0.95
 
     # Last slide: Footer
     slide_end = prs.slides.add_slide(prs.slide_layouts[6])
     set_bg(slide_end)
-    add_text(slide_end, 1, 2.5, 11, 1.5, "NESTI", 60, True, accent, PP_ALIGN.CENTER)
-    add_text(slide_end, 1, 4, 11, 0.8, "AI Web Security Analyst", 24, False, text_color, PP_ALIGN.CENTER)
-    add_text(slide_end, 1, 5.2, 11, 0.6, f"Report generated: {fmt_time(report_date)}", 14, False, PptxRGB(0x88, 0x88, 0x88), PP_ALIGN.CENTER)
+
+    if style == "neo-brutalism":
+        add_shape_rect(slide_end, 2, 2, 9.3, 3, accent_rgb, bg_rgb)
+        add_text(slide_end, 2.3, 2.2, 8.7, 1.5, "NESTI", 72, True, bg_rgb, PP_ALIGN.CENTER)
+        add_text(slide_end, 2.3, 3.8, 8.7, 0.8, "AI Web Security Analyst", 22, False, bg_rgb, PP_ALIGN.CENTER)
+        add_text(slide_end, 2.3, 4.6, 8.7, 0.5, fmt_time(report_date), 13, False, PptxRGB(*t["muted"]), PP_ALIGN.CENTER)
+    elif style == "cherry-blossom":
+        add_text(slide_end, 1, 2.2, 11, 1.2, "~ NESTI ~", 60, True, accent_rgb, PP_ALIGN.CENTER)
+        add_text(slide_end, 1, 3.8, 11, 0.8, "AI Web Security Analyst", 22, False, text_rgb, PP_ALIGN.CENTER)
+        add_shape_rect(slide_end, 5, 4.8, 3.3, 0.04, accent_rgb)
+        add_text(slide_end, 1, 5.2, 11, 0.6, fmt_time(report_date), 14, False, footer_rgb, PP_ALIGN.CENTER)
+    else:
+        add_text(slide_end, 1, 2.5, 11, 1.5, "NESTI", 60, True, accent_rgb, PP_ALIGN.CENTER)
+        add_text(slide_end, 1, 4, 11, 0.8, "AI Web Security Analyst", 24, False, text_rgb, PP_ALIGN.CENTER)
+        add_text(slide_end, 1, 5.2, 11, 0.6, f"Report generated: {fmt_time(report_date)}", 14, False, footer_rgb, PP_ALIGN.CENTER)
 
     prs.save(path)
     return path

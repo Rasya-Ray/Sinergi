@@ -97,7 +97,7 @@ export default function PasswordPage() {
         </motion.div>
 
         <div className="neo-card p-6 mb-8">
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
               <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && checkPassword()}
@@ -106,7 +106,7 @@ export default function PasswordPage() {
                 {showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <button onClick={checkPassword} disabled={loading} className="neo-btn neo-btn-primary flex items-center gap-2">
+            <button onClick={checkPassword} disabled={loading} className="neo-btn neo-btn-primary flex items-center justify-center gap-2 sm:w-auto">
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Analyzing...</> : <><Zap className="w-5 h-5" />ANALYZE</>}
             </button>
           </div>

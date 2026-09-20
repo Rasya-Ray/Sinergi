@@ -568,6 +568,12 @@ REPORT_FORMATS = {
     "pptx": {"ext": ".pptx", "label": "PowerPoint"},
 }
 
+PPTX_THEMES = {
+    "cyberpunk": "Cyberpunk",
+    "neo-brutalism": "Neo Brutalism",
+    "cherry-blossom": "Cherry Blossom",
+}
+
 
 def get_report_data(user_id, monitor_url):
     conn = get_db()
@@ -613,38 +619,53 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if not context.args:
-        monitor_list = "\n".join(
-            f"  {i}. {m['url']}" for i, m in enumerate(monitors, 1)
-        )
-        format_list = "\n".join(
-            f"  {k} - {v['label']}" for k, v in REPORT_FORMATS.items()
-        )
-        await update.message.reply_text(
-            "Usage: /report <nomor_monitor> <format>\n\n"
-            "Monitor yang tersedia:\n"
-            f"{monitor_list}\n\n"
-            "Format yang tersedia:\n"
-            f"{format_list}\n\n"
-            "Contoh: /report 1 pdf\n"
-            "Contoh: /report 2 xlsx\n"
-            "Contoh: /report all pdf (semua monitor)"
-        )
-        return
+        if not context.args:
+            monitor_list = "\n".join(
+                f"  {i}. {m['url']}" for i, m in enumerate(monitors, 1)
+            )
+            format_list = "\n".join(
+                f"  {k} - {v['label']}" for k, v in REPORT_FORMATS.items()
+            )
+            theme_list = "\n".join(
+                f"  {k} - {v}" for k, v in PPTX_THEMES.items()
+            )
+            await update.message.reply_text(
+                "Usage: /report <nomor> <format> [theme]\n\n"
+                "Monitor yang tersedia:\n"
+                f"{monitor_list}\n\n"
+                "Format yang tersedia:\n"
+                f"{format_list}\n\n"
+                "Theme PPTX:\n"
+                f"{theme_list}\n\n"
+                "Contoh:\n"
+                "  /report 1 pdf\n"
+                "  /report 2 pptx cyberpunk\n"
+                "  /report 3 pptx cherry-blossom\n"
+                "  /report all xlsx"
+            )
+            return
 
-    if len(context.args) < 2:
-        await update.message.reply_text("Gunakan: /report <nomor> <format>\nKetik /report untuk bantuan.")
-        return
+        if len(context.args) < 2:
+            await update.message.reply_text("Gunakan: /report <nomor> <format> [theme]\nKetik /report untuk bantuan.")
+            return
 
-    monitor_arg = context.args[0].lower()
-    fmt = context.args[1].lower()
+        monitor_arg = context.args[0].lower()
+        fmt = context.args[1].lower()
+        pptx_theme = context.args[2].lower() if len(context.args) > 2 else "cyberpunk"
 
-    if fmt not in REPORT_FORMATS:
-        format_list = ", ".join(REPORT_FORMATS.keys())
-        await update.message.reply_text(
-            f"Format '{fmt}' tidak tersedia.\nFormat yang tersedia: {format_list}"
-        )
-        return
+        if fmt not in REPORT_FORMATS:
+            format_list = ", ".join(REPORT_FORMATS.keys())
+            await update.message.reply_text(
+                f"Format '{fmt}' tidak tersedia.\nFormat yang tersedia: {format_list}"
+            )
+            return
+
+        if fmt == "pptx" and pptx_theme not in PPTX_THEMES:
+            theme_list = ", ".join(PPTX_THEMES.keys())
+            await update.message.reply_text(
+                f"Theme '{pptx_theme}' tidak tersedia.\nTheme yang tersedia: {theme_list}"
+            )
+            return
 
     if monitor_arg == "all":
         target_monitors = monitors
@@ -659,7 +680,7 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Nomor monitor harus angka atau 'all'.")
             return
 
-    await update.message.reply_text(f"Membuat report {REPORT_FORMATS[fmt]['label']}...")
+            await update.message.reply_text(f"Membuat report {REPORT_FORMATS[fmt]['label']}...")
 
     for mon in target_monitors:
         url = mon["url"]
@@ -680,15 +701,16 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif fmt == "docx":
                 file_path = generate_docx(url, findings, scan_info["scan_data"], scan_info["created_at"])
             elif fmt == "pptx":
-                file_path = generate_pptx(url, findings, scan_info["scan_data"], scan_info["created_at"], style="cyberpunk")
+                file_path = generate_pptx(url, findings, scan_info["scan_data"], scan_info["created_at"], style=pptx_theme)
 
-            filename = f"NESTI_Report_{url.replace('https://', '').replace('http://', '').replace('/', '_')}_{now_wib().strftime('%Y%m%d_%H%M')}{REPORT_FORMATS[fmt]['ext']}"
+            theme_info = f"\nTheme: {PPTX_THEMES[pptx_theme]}" if fmt == "pptx" else ""
+            filename = f"NESTI_{PPTX_THEMES.get(pptx_theme, '').replace(' ', '') if fmt == 'pptx' else REPORT_FORMATS[fmt]['label']}_{url.replace('https://', '').replace('http://', '').replace('/', '_')}_{now_wib().strftime('%Y%m%d_%H%M')}{REPORT_FORMATS[fmt]['ext']}"
 
             with open(file_path, "rb") as f:
                 await update.message.reply_document(
                     document=f,
                     filename=filename,
-                    caption=f"Report: {url}\nFormat: {REPORT_FORMATS[fmt]['label']}\nFindings: {len(findings)}\nDate: {fmt_time(scan_info['created_at'])}",
+                    caption=f"Report: {url}\nFormat: {REPORT_FORMATS[fmt]['label']}{theme_info}\nFindings: {len(findings)}\nDate: {fmt_time(scan_info['created_at'])}",
                 )
 
             os.unlink(file_path)
