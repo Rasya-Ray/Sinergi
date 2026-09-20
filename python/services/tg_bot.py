@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import psycopg2
 
 logger = logging.getLogger("tg_bot")
@@ -25,6 +25,9 @@ SCAN_HOURLY_LIMIT = 10
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from services.scanner import SecurityScanner
 _scanner = SecurityScanner()
+
+# Track users in AI chat mode: {telegram_id: True}
+ai_chat_mode = {}
 
 
 def now_wib():
@@ -100,6 +103,7 @@ def unlink_telegram(tg_id: int):
     cur.execute("DELETE FROM tg_chat_sessions WHERE telegram_id = %s", (tg_id,))
     conn.commit()
     conn.close()
+    ai_chat_mode.pop(tg_id, None)
     return True, "Berhasil unlink akun Telegram"
 
 
@@ -120,6 +124,20 @@ def check_hourly_limit(user_id, limit_type: str, limit: int):
     conn.commit()
     conn.close()
     return count <= limit, count
+
+
+def get_ai_usage(user_id):
+    conn = get_db()
+    cur = conn.cursor()
+    now = now_wib()
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    cur.execute(
+        "SELECT ai_chat_count FROM tg_hourly_limits WHERE user_id = %s AND hour_start = %s",
+        (user_id, hour_start),
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row else 0
 
 
 async def call_openclaw(message: str) -> str:
@@ -208,6 +226,8 @@ def format_findings(findings: list) -> str:
     return "\n".join(lines)
 
 
+# ============ COMMANDS ============
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -253,6 +273,35 @@ async def cmd_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 
+async def cmd_whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    user = update.effective_user
+    existing = get_user_by_tg_id(user.id)
+    if not existing:
+        await update.message.reply_text(
+            "Akun belum terlink.\n\n"
+            "Ketik /link email@kamu.com untuk menghubungkan."
+        )
+        return
+
+    used = get_ai_usage(existing["id"])
+    in_ai_mode = ai_chat_mode.get(user.id, False)
+
+    text = f"IDENTITAS ANDA\n\n"
+    text += f"  Nama: {existing['name'] or '-'}\n"
+    text += f"  Email: {existing['email']}\n"
+    text += f"  Telegram: @{user.username or '-'}\n"
+    text += f"  User ID: {user.id}\n\n"
+    text += f"STATUS AI CHAT\n\n"
+    text += f"  Mode: {'AKTIF' if in_ai_mode else 'Nonaktif'}\n"
+    text += f"  Penggunaan jam ini: {used}/{AI_HOURLY_LIMIT}\n\n"
+    text += f"Ketik /ai <pesan> untuk mulai chat AI.\n"
+    text += f"Ketik /stopai untuk keluar dari mode AI."
+
+    await update.message.reply_text(text)
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -260,14 +309,20 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "NESTI Bot Commands:\n\n"
         "/link <email> - Link akun NESTI\n"
         "/unlink - Unlink akun Telegram\n"
-        "/ai <pesan> - Chat AI Security Analyst\n"
+        "/whoami - Info akun Anda\n"
+        "/ai <pesan> - Mulai chat AI (mode aktif)\n"
+        "/stopai - Keluar dari mode AI chat\n"
         "/laporan - Laporan monitoring per URL\n"
         "/scan <url> - Scan website\n"
         "/status - Status monitoring\n"
         "/help - Tampilkan bantuan ini\n\n"
-        f"Limit per jam: AI={AI_HOURLY_LIMIT}, Laporan={REPORT_HOURLY_LIMIT}, Scan={SCAN_HOURLY_LIMIT}"
+        f"Limit per jam: AI={AI_HOURLY_LIMIT}, Laporan={REPORT_HOURLY_LIMIT}, Scan={SCAN_HOURLY_LIMIT}\n\n"
+        "Tips: Setelah ketik /ai, semua pesan berikutnya\n"
+        "otomatis chat dengan AI sampai ketik /stopai."
     )
 
+
+# ============ AI CHAT MODE ============
 
 async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -277,9 +332,6 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not existing:
         await update.message.reply_text("Akun belum terlink. Ketik /link email@kamu.com")
         return
-    if not context.args:
-        await update.message.reply_text("Gunakan: /ai <pesan>")
-        return
 
     allowed, count = check_hourly_limit(existing["id"], "ai_chat_count", AI_HOURLY_LIMIT)
     if not allowed:
@@ -288,13 +340,68 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    message = " ".join(context.args)
+    message = " ".join(context.args) if context.args else ""
+
+    if message:
+        ai_chat_mode[user.id] = True
+        await update.message.reply_text("Berpikir...")
+        reply = await call_openclaw(message)
+        if not reply:
+            reply = "Maaf, AI sedang tidak tersedia. Coba lagi nanti."
+        await update.message.reply_text(reply)
+        remaining = AI_HOURLY_LIMIT - count
+        if remaining <= 2:
+            await update.message.reply_text(f"Sisa limit: {remaining}/{AI_HOURLY_LIMIT}")
+    else:
+        ai_chat_mode[user.id] = True
+        await update.message.reply_text(
+            "Mode AI chat AKTIF.\n"
+            "Ketik pesan apa saja untuk chat dengan AI.\n"
+            "Ketik /stopai untuk keluar."
+        )
+
+
+async def cmd_stopai(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    user = update.effective_user
+    ai_chat_mode.pop(user.id, None)
+    await update.message.reply_text("Mode AI chat dinonaktifkan.")
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+    user = update.effective_user
+
+    if not ai_chat_mode.get(user.id, False):
+        return
+
+    existing = get_user_by_tg_id(user.id)
+    if not existing:
+        return
+
+    allowed, count = check_hourly_limit(existing["id"], "ai_chat_count", AI_HOURLY_LIMIT)
+    if not allowed:
+        ai_chat_mode.pop(user.id, None)
+        await update.message.reply_text(
+            f"Limit jam ini sudah habis ({AI_HOURLY_LIMIT}/{AI_HOURLY_LIMIT}).\n"
+            "Mode AI chat dinonaktifkan.\nCoba lagi jam berikutnya."
+        )
+        return
+
+    message = update.message.text
     await update.message.reply_text("Berpikir...")
     reply = await call_openclaw(message)
     if not reply:
         reply = "Maaf, AI sedang tidak tersedia. Coba lagi nanti."
     await update.message.reply_text(reply)
+    remaining = AI_HOURLY_LIMIT - count
+    if remaining <= 2:
+        await update.message.reply_text(f"Sisa limit: {remaining}/{AI_HOURLY_LIMIT}")
 
+
+# ============ MONITORING ============
 
 async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -432,16 +539,31 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text[:4000])
 
 
+# ============ DELETE HISTORY HANDLER ============
+
+async def handle_deleted_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.delete:
+        return
+
+    for msg in update.message.delete:
+        if msg.from_user and not msg.from_user.is_bot:
+            tg_id = msg.from_user.id
+            ai_chat_mode.pop(tg_id, None)
+
+
 def create_bot_app() -> Application:
     app = Application.builder().token(TG_TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("link", cmd_link))
     app.add_handler(CommandHandler("unlink", cmd_unlink))
+    app.add_handler(CommandHandler("whoami", cmd_whoami))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("ai", cmd_ai))
+    app.add_handler(CommandHandler("stopai", cmd_stopai))
     app.add_handler(CommandHandler("laporan", cmd_laporan))
     app.add_handler(CommandHandler("scan", cmd_scan))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
     return app
 
 

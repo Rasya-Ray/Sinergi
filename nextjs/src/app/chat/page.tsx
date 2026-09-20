@@ -86,13 +86,13 @@ export default function ChatPage() {
             <button onClick={createSession} className="neo-btn neo-btn-primary w-full flex items-center justify-center gap-2 mb-4">
               <Plus className="w-4 h-4" />New Session
             </button>
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-y-auto max-h-[30vh] lg:max-h-none">
               {sessions.map(s => (
                 <div key={s.id} className={`flex items-center border-3 border-neo-black ${activeSession === s.id ? "bg-neo-black text-neo-yellow" : "bg-white hover:bg-neo-yellow/30"}`}>
-                  <button onClick={() => setActiveSession(s.id)} className="flex-1 text-left px-4 py-3 font-semibold uppercase text-sm">
+                  <button onClick={() => setActiveSession(s.id)} className="flex-1 text-left px-4 py-3 font-semibold uppercase text-sm truncate">
                     {s.title}
                   </button>
-                  <button onClick={() => deleteSession(s.id)} className="px-3 py-3 hover:text-neo-pink transition-colors">
+                  <button onClick={() => deleteSession(s.id)} className="px-3 py-3 hover:text-neo-pink transition-colors flex-shrink-0">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
