@@ -280,9 +280,10 @@ def get_latest_scan_for_url(user_id, url: str):
     conn = get_db()
     try:
         cur = conn.cursor()
+        domain = url.replace("https://", "").replace("http://", "").rstrip("/")
         cur.execute(
-            "SELECT id, target_url, findings, created_at FROM scans WHERE user_id = %s AND target_url LIKE %s ORDER BY created_at DESC LIMIT 1",
-            (user_id, f"%{url}%"),
+            "SELECT id, target_url, findings, created_at FROM scans WHERE user_id = %s AND (target_url LIKE %s OR target_url LIKE %s) ORDER BY created_at DESC LIMIT 1",
+            (user_id, f"%{domain}%", f"%{url}%"),
         )
         row = cur.fetchone()
         if not row:
@@ -582,16 +583,18 @@ async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reports = get_reports_for_user(existing["id"])
     report_urls = {}
     for r in reports:
-        url = r.get("url")
-        if url and url not in report_urls:
-            report_urls[url] = r
+        rurl = r.get("url") or ""
+        domain = rurl.replace("https://", "").replace("http://", "").rstrip("/")
+        if domain and domain not in report_urls:
+            report_urls[domain] = r
 
     text = "LAPORAN MONITORING\n"
     text += f"Waktu: {now_wib().strftime('%d %b %Y %H:%M WIB')}\n\n"
 
     for mon in monitors:
-        url = mon["url"]
-        text += f"URL: {url}\n"
+        raw_url = mon["url"]
+        domain = raw_url.replace("https://", "").replace("http://", "").rstrip("/")
+        text += f"URL: {raw_url}\n"
         text += f"Status: {mon['status']}\n"
 
         if mon.get("last_run"):
@@ -599,7 +602,7 @@ async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if mon.get("next_run"):
             text += f"Next Run: {fmt_time(mon['next_run'])}\n"
 
-        report = report_urls.get(url)
+        report = report_urls.get(domain)
         if report:
             content = report["content"] or {}
             findings = content.get("findings", [])
@@ -607,7 +610,7 @@ async def cmd_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"Findings: {len(findings)}\n"
             text += format_findings(findings) + "\n\n"
         else:
-            scan = get_latest_scan_for_url(existing["id"], url)
+            scan = get_latest_scan_for_url(existing["id"], raw_url)
             if scan:
                 findings = scan.get("findings") or []
                 text += f"Scan terakhir: {fmt_time(scan['created_at'])}\n"
