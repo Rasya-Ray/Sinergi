@@ -156,7 +156,7 @@ export default function Home() {
         </AnimatedSection>
 
         <div className="mt-20 text-center">
-          <p className="text-sm font-mono text-neo-black/40">Powered by OpenClaw AI • Nesti v3.0 • 2025</p>
+          <p className="text-sm font-mono text-neo-black/40">Powered by OpenClaw AI • Nesti v3.0 • 2026</p>
         </div>
       </section>
     </div>
