@@ -1,6 +1,9 @@
 import os
+import re
 import asyncio
 from schemas.security import ChatRequest, ChatResponse
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class ChatService:
@@ -32,6 +35,7 @@ class ChatService:
             history_text += f"{role}: {item.get('content', '')[:100]}\n"
 
         user_name = getattr(req, "user_name", None) or "User"
+        user_id = req.context.get("user_id", "unknown")
 
         prompt_parts = []
         prompt_parts.append(f"Short concise replies. User: {user_name}.")
@@ -44,7 +48,7 @@ class ChatService:
         full_prompt = "\n".join(prompt_parts)
 
         try:
-            reply = await self._call_openclaw(full_prompt)
+            reply = await self._call_openclaw(full_prompt, user_id)
             if reply and len(reply.strip()) > 3:
                 return ChatResponse(reply=reply.strip(), session_id=req.context.get("session_id", ""), model="nesti-openclaw", provider="openclaw")
         except Exception:
@@ -53,18 +57,31 @@ class ChatService:
         reply = self._smart_fallback(last_msg, context_parts)
         return ChatResponse(reply=reply, session_id=req.context.get("session_id", ""), model="nesti-fallback", provider="fallback")
 
-    async def _call_openclaw(self, message: str) -> str:
-        proc = await asyncio.create_subprocess_exec(
-            self.openclaw_bin, "agent", "--agent", self.agent_id, "-m", message,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
-        if proc.returncode == 0 and stdout:
-            output = stdout.decode().strip()
-            if "GatewayClientRequestError" in output or "rate_limit" in output:
-                raise RuntimeError("Rate limited")
-            return output
+    async def _call_openclaw(self, message: str, user_id: str = "unknown") -> str:
+        session_key = f"agent:{self.agent_id}:web:{user_id}"
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self.openclaw_bin, "agent", "--agent", self.agent_id,
+                "--session-key", session_key, "-m", message,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+            if proc.returncode == 0 and stdout:
+                output = stdout.decode().strip()
+                output = ANSI_RE.sub("", output)
+                lines = [l for l in output.splitlines()
+                         if not l.startswith("[") and "OPENCLAW" not in l]
+                output = "\n".join(lines).strip()
+                if not output or "GatewayClientRequestError" in output or "rate_limit" in output:
+                    raise RuntimeError("Rate limited")
+                return output
+        except asyncio.TimeoutError:
+            pass
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
         raise RuntimeError("OpenClaw failed")
 
     def _smart_fallback(self, message: str, context: list) -> str:

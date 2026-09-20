@@ -213,11 +213,13 @@ def _strip_ansi(text: str) -> str:
     return ANSI_RE.sub("", text)
 
 
-async def call_openclaw(message: str) -> str:
+async def call_openclaw(message: str, tg_id: int = 0) -> str:
+    session_key = f"agent:{OPENCLAW_AGENT}:tg:{tg_id}" if tg_id else f"agent:{OPENCLAW_AGENT}:anon"
     try:
         short_msg = message[:500]
         proc = await asyncio.create_subprocess_exec(
-            OPENCLAW_BIN, "agent", "--agent", OPENCLAW_AGENT, "-m", short_msg,
+            OPENCLAW_BIN, "agent", "--agent", OPENCLAW_AGENT,
+            "--session-key", session_key, "-m", short_msg,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -482,7 +484,7 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message:
         ai_chat_mode[user.id] = True
         thinking_msg = await update.message.reply_text("Berpikir...")
-        reply = await call_openclaw(message)
+        reply = await call_openclaw(message, user.id)
         if not reply:
             reply = "Maaf, AI sedang tidak tersedia atau timeout (30 detik). Coba pesan lebih pendek."
         try:
@@ -537,7 +539,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     message = update.message.text
     thinking_msg = await update.message.reply_text("Berpikir...")
-    reply = await call_openclaw(message)
+    reply = await call_openclaw(message, user.id)
     if not reply:
         reply = "Maaf, AI sedang tidak tersedia atau timeout (30 detik). Coba pesan lebih pendek."
     try:
