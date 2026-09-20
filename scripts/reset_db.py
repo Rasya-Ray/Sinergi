@@ -151,6 +151,20 @@ def main():
     for stmt in fk_stmts:
         cur.execute(stmt)
 
+    # Post-reset fixups: constraints that dynamic dump may miss
+    print("Applying fixups...")
+    fixups = [
+        # tg_hourly_limits needs composite UNIQUE for ON CONFLICT
+        "ALTER TABLE tg_hourly_limits DROP CONSTRAINT IF EXISTS tg_hourly_limits_user_id_key",
+        "ALTER TABLE tg_hourly_limits DROP CONSTRAINT IF EXISTS tg_hourly_limits_hour_start_key",
+        "ALTER TABLE tg_hourly_limits ADD CONSTRAINT tg_hourly_limits_user_hour UNIQUE (user_id, hour_start)",
+    ]
+    for sql in fixups:
+        try:
+            cur.execute(sql)
+        except Exception:
+            pass
+
     conn.commit()
     conn.close()
 
